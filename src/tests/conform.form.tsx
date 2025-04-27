@@ -2,26 +2,29 @@ import { getInputProps, useForm } from "@conform-to/react";
 
 export const SampleForm = () => {
   const [form, fields] = useForm({
-    defaultValue: { firstName: "jared", lastName: "jones" },
+    defaultValue: {
+      rawTextInput: "initial rawTextInput value",
+      fieldTextInput: "initial fieldTextInput value",
+    },
   });
 
   return (
     <form onSubmit={form.onSubmit}>
-      <label htmlFor="firstName">First Name</label>
+      <label htmlFor="rawTextInput">Raw Text Input</label>
       <input
-        {...getInputProps(fields.firstName, {
+        {...getInputProps(fields.rawTextInput, {
           type: "text",
         })}
         type="text"
-        id="firstName"
+        id="rawTextInput"
       />
-      <label htmlFor="lastName">Last Name</label>
+      <label htmlFor="fieldTextInput">Field Text Input</label>
       <input
-        {...getInputProps(fields.lastName, {
+        {...getInputProps(fields.fieldTextInput, {
           type: "text",
         })}
         type="text"
-        id="lastName"
+        id="fieldTextInput"
       />
       <button type="submit">Submit</button>
     </form>

@@ -36,12 +36,14 @@ describe("compornent test", () => {
     render(<Component />);
 
     expect(
-      screen.getByRole<HTMLInputElement>("textbox", { name: "First Name" })
-        .value,
-    ).toBe("jared");
+      screen.getByRole<HTMLInputElement>("textbox", {
+        name: "Raw Text Input",
+      }).value,
+    ).toBe("initial rawTextInput value");
     expect(
-      screen.getByRole<HTMLInputElement>("textbox", { name: "Last Name" })
-        .value,
-    ).toBe("jones");
+      screen.getByRole<HTMLInputElement>("textbox", {
+        name: "Field Text Input",
+      }).value,
+    ).toBe("initial fieldTextInput value");
   });
 });

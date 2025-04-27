@@ -1,27 +1,26 @@
-import { Formik } from "formik";
+import { Field, Formik } from "formik";
 
 export const SampleForm = () => {
   return (
     <Formik
-      initialValues={{ firstName: "jared", lastName: "jones" }}
+      initialValues={{
+        rawTextInput: "initial rawTextInput value",
+        fieldTextInput: "initial fieldTextInput value",
+      }}
       onSubmit={(values) => {
         console.log(values);
       }}
     >
       {(props) => (
         <form onSubmit={props.handleSubmit}>
-          <label htmlFor="firstName">First Name</label>
+          <label htmlFor="rawTextInput">Raw Text Input</label>
           <input
-            id="firstName"
+            id="rawTextInput"
             onChange={props.handleChange}
-            value={props.values.firstName}
+            value={props.values.rawTextInput}
           />
-          <label htmlFor="lastName">Last Name</label>
-          <input
-            id="lastName"
-            onChange={props.handleChange}
-            value={props.values.lastName}
-          />
+          <label htmlFor="fieldTextInput">Field Text Input</label>
+          <Field name="fieldTextInput" id="fieldTextInput" />
           <button type="submit">Submit</button>
         </form>
       )}
