@@ -50,5 +50,10 @@ describe("compornent test", () => {
         name: "Many Attributes Input",
       }).value,
     ).toBe("initial manyAttributesInput value");
+    expect(
+      screen.getByRole<HTMLInputElement>("spinbutton", {
+        name: "Custom Input",
+      }).value,
+    ).toBe("123");
   });
 });
