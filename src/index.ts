@@ -1,5 +1,63 @@
-import jscodeshift, { type JSCodeshift, type JSXElement } from "jscodeshift";
+import jscodeshift, {
+  type JSCodeshift,
+  type JSXElement,
+  type JSXIdentifier,
+  type JSXNamespacedName,
+} from "jscodeshift";
 import { format } from "prettier";
+
+// JSX属性に関する汎用的な型定義
+interface AttributeLike {
+  type: string;
+  name?: JSXIdentifier | JSXNamespacedName;
+  value?: unknown;
+}
+
+/**
+ * 文字列リテラル型であるかをチェックする型ガード
+ */
+function isStringLiteral(
+  value: unknown,
+): value is { type: "StringLiteral"; value: string } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "type" in value &&
+    value.type === "StringLiteral"
+  );
+}
+
+/**
+ * JSX属性から値を安全に取り出す
+ */
+function getAttributeValue(
+  attr: AttributeLike | null | undefined,
+): string | null {
+  if (!attr || !("value" in attr) || !attr.value) return null;
+
+  if (isStringLiteral(attr.value)) {
+    return attr.value.value;
+  }
+
+  return null;
+}
+
+/**
+ * 関数式であるかをチェックする型ガード
+ */
+function isFunctionExpression(node: unknown): node is {
+  type: "ArrowFunctionExpression" | "FunctionExpression";
+  body: unknown;
+} {
+  return (
+    node !== null &&
+    typeof node === "object" &&
+    "type" in node &&
+    ["ArrowFunctionExpression", "FunctionExpression"].includes(
+      node.type as string,
+    )
+  );
+}
 
 /**
  * 要素を getInputProps 化する関数
@@ -26,19 +84,8 @@ function transformToGetInputProps(
       : null;
 
     // Use name attribute value if available, otherwise fall back to id
-    const fieldName =
-      nameAttr && "value" in nameAttr && nameAttr.value
-        ? nameAttr.value.type === "StringLiteral"
-          ? nameAttr.value.value
-          : null
-        : null;
-
-    const idValue =
-      idAttr && "value" in idAttr && idAttr.value
-        ? idAttr.value.type === "StringLiteral"
-          ? idAttr.value.value
-          : fieldName || "field"
-        : fieldName || "field";
+    const fieldName = getAttributeValue(nameAttr);
+    const idValue = getAttributeValue(idAttr) || fieldName || "field";
 
     const newAttrs = [
       j.jsxSpreadAttribute(
@@ -53,9 +100,7 @@ function transformToGetInputProps(
         ]),
       ),
       j.jsxAttribute(j.jsxIdentifier("type"), j.literal("text")),
-      idAttr && "value" in idAttr
-        ? j.jsxAttribute(j.jsxIdentifier("id"), j.literal(idValue))
-        : j.jsxAttribute(j.jsxIdentifier("id"), j.literal(idValue)),
+      j.jsxAttribute(j.jsxIdentifier("id"), j.literal(idValue)),
     ];
 
     if (isField) {
@@ -134,39 +179,28 @@ export async function convert(code: string): Promise<string> {
     const childrenFn = path.node.children?.find(
       (c) => c.type === "JSXExpressionContainer",
     )?.expression;
-    if (
-      !(
-        childrenFn &&
-        ["ArrowFunctionExpression", "FunctionExpression"].includes(
-          childrenFn.type,
-        )
-      )
-    ) {
+
+    if (!childrenFn || !isFunctionExpression(childrenFn)) {
       throw new Error("Invalid children function");
     }
 
     // <form> JSX を抽出
     let formJSX: JSXElement | null = null;
 
-    if (
-      childrenFn.type === "ArrowFunctionExpression" ||
-      childrenFn.type === "FunctionExpression"
-    ) {
-      const body = childrenFn.body;
-      if (body.type === "JSXElement") {
-        formJSX = body;
-      } else if (body.type === "BlockStatement") {
-        const ret = body.body.find(
-          (s: { type: string }) => s.type === "ReturnStatement",
-        );
-        if (
-          ret &&
-          "argument" in ret &&
-          ret.argument &&
-          typeof ret.argument === "object"
-        ) {
-          formJSX = ret.argument.type === "JSXElement" ? ret.argument : null;
-        }
+    const body = childrenFn.body;
+    if (body.type === "JSXElement") {
+      formJSX = body;
+    } else if (body.type === "BlockStatement") {
+      const ret = body.body.find(
+        (s: { type: string }) => s.type === "ReturnStatement",
+      );
+      if (
+        ret &&
+        "argument" in ret &&
+        ret.argument &&
+        typeof ret.argument === "object"
+      ) {
+        formJSX = ret.argument.type === "JSXElement" ? ret.argument : null;
       }
     }
 
