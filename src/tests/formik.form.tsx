@@ -1,4 +1,9 @@
 import { Field, Formik } from "formik";
+import type { JSX } from "react";
+
+const CustomInput = (props: JSX.IntrinsicElements["input"]) => (
+  <input {...props} />
+);
 
 export const SampleForm = () => {
   return (
@@ -7,6 +12,7 @@ export const SampleForm = () => {
         rawInput: "initial rawInput value",
         fieldInput: "initial fieldInput value",
         manyAttributesInput: "initial manyAttributesInput value",
+        customInput: 123,
       }}
       onSubmit={(values) => {
         console.log(values);
@@ -31,6 +37,13 @@ export const SampleForm = () => {
             onChange={props.handleChange}
             onClick={props.handleBlur}
             value={props.values.manyAttributesInput}
+          />
+          <label htmlFor="customInput">Custom Input</label>
+          <Field
+            name="customInput"
+            id="customInput"
+            type="number"
+            as={CustomInput}
           />
           <button type="submit">Submit</button>
         </form>

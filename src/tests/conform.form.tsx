@@ -1,4 +1,9 @@
 import { getInputProps, useForm } from "@conform-to/react";
+import type { JSX } from "react";
+
+const CustomInput = (props: JSX.IntrinsicElements["input"]) => (
+  <input {...props} />
+);
 
 export const SampleForm = () => {
   const [form, fields] = useForm({
@@ -6,6 +11,7 @@ export const SampleForm = () => {
       rawInput: "initial rawInput value",
       fieldInput: "initial fieldInput value",
       manyAttributesInput: "initial manyAttributesInput value",
+      customInput: 123,
     },
   });
 
@@ -33,6 +39,13 @@ export const SampleForm = () => {
           disabled: false,
         })}
         id="manyAttributesInput"
+      />
+      <label htmlFor="customInput">Custom Input</label>
+      <CustomInput
+        {...getInputProps(fields.customInput, {
+          type: "number",
+        })}
+        id="customInput"
       />
       <button type="submit">Submit</button>
     </form>
