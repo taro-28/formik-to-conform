@@ -1,6 +1,6 @@
 import { Formik } from "formik";
 
-export const BasicExample = () => {
+export const SampleForm = () => {
   return (
     <Formik
       initialValues={{ firstName: "jared", lastName: "jones" }}

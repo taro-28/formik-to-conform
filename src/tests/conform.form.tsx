@@ -1,6 +1,6 @@
 import { getInputProps, useForm } from "@conform-to/react";
 
-export const BasicExample = () => {
+export const SampleForm = () => {
   const [form, fields] = useForm({
     defaultValue: { firstName: "jared", lastName: "jones" },
   });
