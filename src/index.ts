@@ -43,13 +43,14 @@ export async function convert(code: string): Promise<string> {
   for (const path of root.findJSXElements("Formik").paths()) {
     const opening = path.node.openingElement;
     const attrs = opening.attributes;
-
     // initialValues, onSubmit 抽出
-    const initAttr = attrs.find(
+    const initAttr = attrs?.find(
       (a) =>
-        a.type === "JSXAttribute" && (a.name as any).name === "initialValues",
-    ) as any;
-    const submitAttr = attrs.find(
+        a.type === "JSXAttribute" &&
+        a.name.type === "JSXIdentifier" &&
+        a.name.name === "initialValues",
+    );
+    const submitAttr = attrs?.find(
       (a) => a.type === "JSXAttribute" && (a.name as any).name === "onSubmit",
     ) as any;
 
@@ -59,11 +60,10 @@ export async function convert(code: string): Promise<string> {
     const onSubmitExpr = submitAttr?.value
       ? (submitAttr.value as any).expression
       : null;
-
     // 子要素 ({ props }) => (<form … />) を取得
-    const childrenFn = path.node.children.find(
+    const childrenFn = path.node.children?.find(
       (c) => c.type === "JSXExpressionContainer",
-    )?.expression as any;
+    )?.expression;
     if (
       !childrenFn ||
       !["ArrowFunctionExpression", "FunctionExpression"].includes(
@@ -101,9 +101,9 @@ export async function convert(code: string): Promise<string> {
     });
     for (const inputPath of inputElements.paths()) {
       const el = inputPath.node.openingElement;
-      const idAttr = el.attributes.find(
-        (a) => a.type === "JSXAttribute" && (a.name as any).name === "id",
-      ) as any;
+      const idAttr = el.attributes?.find(
+        (a) => a.type === "JSXAttribute" && a.name?.name === "id",
+      );
       const idValue = idAttr?.value?.value ?? "field";
 
       el.attributes = [
