@@ -1,4 +1,4 @@
-import jscodeshift, { type JSCodeshift } from "jscodeshift";
+import jscodeshift, { type JSCodeshift, type JSXElement } from "jscodeshift";
 import { format } from "prettier";
 
 /**
@@ -50,49 +50,70 @@ export async function convert(code: string): Promise<string> {
         a.name.type === "JSXIdentifier" &&
         a.name.name === "initialValues",
     );
-    const submitAttr = attrs?.find(
-      (a) => a.type === "JSXAttribute" && (a.name as any).name === "onSubmit",
-    ) as any;
 
-    const defaultValueExpr = initAttr?.value
-      ? (initAttr.value as any).expression
-      : null;
-    const onSubmitExpr = submitAttr?.value
-      ? (submitAttr.value as any).expression
-      : null;
+    const defaultValueExpr =
+      initAttr && initAttr.type === "JSXAttribute" && initAttr.value
+        ? initAttr.value.type === "JSXExpressionContainer"
+          ? initAttr.value.expression
+          : null
+        : null;
+
     // 子要素 ({ props }) => (<form … />) を取得
     const childrenFn = path.node.children?.find(
       (c) => c.type === "JSXExpressionContainer",
     )?.expression;
     if (
-      !childrenFn ||
-      !["ArrowFunctionExpression", "FunctionExpression"].includes(
-        childrenFn.type,
+      !(
+        childrenFn &&
+        ["ArrowFunctionExpression", "FunctionExpression"].includes(
+          childrenFn.type,
+        )
       )
-    )
-      return;
+    ) {
+      throw new Error("Invalid children function");
+    }
 
     // <form> JSX を抽出
-    let formJSX: any = null;
-    const body = childrenFn.body;
-    if (body.type === "JSXElement") {
-      formJSX = body;
-    } else if (body.type === "BlockStatement") {
-      const ret = body.body.find((s: any) => s.type === "ReturnStatement");
-      formJSX = ret?.argument;
+    let formJSX: JSXElement | null = null;
+
+    if (
+      childrenFn.type === "ArrowFunctionExpression" ||
+      childrenFn.type === "FunctionExpression"
+    ) {
+      const body = childrenFn.body;
+      if (body.type === "JSXElement") {
+        formJSX = body;
+      } else if (body.type === "BlockStatement") {
+        const ret = body.body.find(
+          (s: { type: string }) => s.type === "ReturnStatement",
+        );
+        if (
+          ret &&
+          "argument" in ret &&
+          ret.argument &&
+          typeof ret.argument === "object"
+        ) {
+          formJSX = ret.argument.type === "JSXElement" ? ret.argument : null;
+        }
+      }
     }
-    if (!formJSX) return;
+
+    if (!formJSX) {
+      throw new Error("Invalid children function");
+    }
 
     /* ---- form.onSubmit に差し替え ---- */
     const onSubmitAttrs = j(formJSX).find(j.JSXAttribute, {
       name: { name: "onSubmit" },
     });
     for (const attrPath of onSubmitAttrs.paths()) {
-      (attrPath.get("value") as any).replace(
-        j.jsxExpressionContainer(
-          j.memberExpression(j.identifier("form"), j.identifier("onSubmit")),
-        ),
-      );
+      attrPath
+        .get("value")
+        .replace(
+          j.jsxExpressionContainer(
+            j.memberExpression(j.identifier("form"), j.identifier("onSubmit")),
+          ),
+        );
     }
 
     /* ---- <input> を getInputProps 化 ---- */
@@ -104,7 +125,13 @@ export async function convert(code: string): Promise<string> {
       const idAttr = el.attributes?.find(
         (a) => a.type === "JSXAttribute" && a.name?.name === "id",
       );
-      const idValue = idAttr?.value?.value ?? "field";
+      // Handle both JSXAttribute and JSXSpreadAttribute types
+      const idValue =
+        idAttr && "value" in idAttr && idAttr.value
+          ? idAttr.value.type === "StringLiteral"
+            ? idAttr.value.value
+            : "field"
+          : "field";
 
       el.attributes = [
         j.jsxSpreadAttribute(
@@ -117,7 +144,7 @@ export async function convert(code: string): Promise<string> {
         ),
         j.jsxAttribute(j.jsxIdentifier("type"), j.literal("text")),
         idAttr || j.jsxAttribute(j.jsxIdentifier("id"), j.literal(idValue)),
-      ] as any;
+      ];
     }
 
     /* ---- useForm 宣言をコンポーネント先頭へ挿入 ---- */
@@ -129,7 +156,11 @@ export async function convert(code: string): Promise<string> {
             j.property(
               "init",
               j.identifier("defaultValue"),
-              defaultValueExpr || j.objectExpression([]),
+              defaultValueExpr &&
+                (defaultValueExpr.type === "ObjectExpression" ||
+                  defaultValueExpr.type === "Identifier")
+                ? defaultValueExpr
+                : j.objectExpression([]),
             ),
           ]),
         ]),
