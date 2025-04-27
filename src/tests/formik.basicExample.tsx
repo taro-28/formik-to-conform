@@ -3,18 +3,24 @@ import { Formik } from "formik";
 export const BasicExample = () => {
   return (
     <Formik
-      initialValues={{ name: "jared" }}
+      initialValues={{ firstName: "jared", lastName: "jones" }}
       onSubmit={(values) => {
         console.log(values);
       }}
     >
       {(props) => (
         <form onSubmit={props.handleSubmit}>
-          <label htmlFor="name">Name</label>
+          <label htmlFor="firstName">First Name</label>
           <input
-            id="name"
+            id="firstName"
             onChange={props.handleChange}
-            value={props.values.name}
+            value={props.values.firstName}
+          />
+          <label htmlFor="lastName">Last Name</label>
+          <input
+            id="lastName"
+            onChange={props.handleChange}
+            value={props.values.lastName}
           />
           <button type="submit">Submit</button>
         </form>
