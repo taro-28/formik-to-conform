@@ -34,7 +34,9 @@ function isStringLiteral(
 function getAttributeValue(
   attr: AttributeLike | null | undefined,
 ): string | null {
-  if (!attr || !("value" in attr) || !attr.value) return null;
+  if (!(attr && "value" in attr && attr.value)) {
+    return null;
+  }
 
   if (isStringLiteral(attr.value)) {
     return attr.value.value;
@@ -335,7 +337,7 @@ export async function convert(code: string): Promise<string> {
       (c) => c.type === "JSXExpressionContainer",
     )?.expression;
 
-    if (!childrenFn || !isFunctionExpression(childrenFn)) {
+    if (!(childrenFn && isFunctionExpression(childrenFn))) {
       throw new Error("Invalid children function");
     }
 
