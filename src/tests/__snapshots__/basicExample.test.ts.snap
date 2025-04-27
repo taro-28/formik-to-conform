@@ -3,41 +3,53 @@
 exports[`basic example 1`] = `
 "import React from 'react';
 import ReactDOM from 'react-dom';
-import { Formik, Field, Form } from 'formik';
+import { useForm, conform, type SubmitHandler } from '@conform-to/react';
 
-const Basic = () => (
-  <div>
-    <h1>Sign Up</h1>
-    <Formik
-      initialValues={{
-        firstName: '',
-        lastName: '',
-        email: '',
-      }}
-      onSubmit={async (values) => {
-        await new Promise((r) => setTimeout(r, 500));
-        alert(JSON.stringify(values, null, 2));
-      }}
-    >
-      <Form>
+export const Basic = () => {
+  const [form, { firstName, lastName, email }] = useForm({
+    defaultValue: {
+      firstName: "",
+      lastName: "",
+      email: "",
+    },
+    onSubmit: async ({ formData }) => {
+      const data = Object.fromEntries(formData) as Values;
+      await new Promise((r) => setTimeout(r, 500));
+      alert(JSON.stringify(data, null, 2));
+    },
+  });
+
+  return (
+    <div>
+      <h1>Sign Up</h1>
+      <form {...form.props}>
         <label htmlFor="firstName">First Name</label>
-        <Field id="firstName" name="firstName" placeholder="Jane" />
+        <input
+          {...conform.input(firstName)}
+          id="firstName"
+          placeholder="Jane"
+        />
 
         <label htmlFor="lastName">Last Name</label>
-        <Field id="lastName" name="lastName" placeholder="Doe" />
+        <input
+          {...conform.input(lastName)}
+          id="lastName"
+          placeholder="Doe"
+        />
 
         <label htmlFor="email">Email</label>
-        <Field
+        <input
+          {...conform.input(email)}
           id="email"
-          name="email"
-          placeholder="jane@acme.com"
           type="email"
+          placeholder="jane@acme.com"
         />
+
         <button type="submit">Submit</button>
-      </Form>
-    </Formik>
-  </div>
-);
+      </form>
+    </div>
+  );
+}
 
 ReactDOM.render(<Basic />, document.getElementById('root'));
 "

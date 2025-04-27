@@ -3,18 +3,21 @@
   "organizeImports": {
     "enabled": true
   },
-  "files": {
-    "ignore": ["**/*/formik.*"]
-  },
   "linter": {
     "rules": {
       "all": true,
       "style": {
-        "noDefaultExport": "off"
+        "noDefaultExport": "off",
+        "useNamingConvention": "off"
       },
       "correctness": {
         "noNodejsModules": "off",
         "useImportExtensions": "off"
+      },
+      "suspicious": {
+        "noConsole": "off",
+        "noConsoleLog": "off",
+        "noReactSpecificProps": "off"
       }
     }
   },

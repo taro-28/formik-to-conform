@@ -23,8 +23,9 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "noEmit": true,
-    "useDefineForClassFields": true
+    "useDefineForClassFields": true,
+    "jsx": "preserve",
+    "types": ["@testing-library/jest-dom"]
   },
-  "include": ["src/**/*"],
-  "exclude": ["**/*/formik.*"]
+  "include": ["src/**/*"]
 }

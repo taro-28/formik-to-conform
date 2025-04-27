@@ -1,0 +1,36 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`compornent test > render 'conform' 1`] = `
+<div>
+  <form>
+    <input
+      form="«r0»"
+      id="«r0»-name"
+      name="name"
+      type="text"
+      value="jared"
+    />
+    <button
+      type="submit"
+    >
+      Submit
+    </button>
+  </form>
+</div>
+`;
+
+exports[`compornent test > render 'formik' 1`] = `
+<div>
+  <form>
+    <input
+      name="name"
+      value="jared"
+    />
+    <button
+      type="submit"
+    >
+      Submit
+    </button>
+  </form>
+</div>
+`;
