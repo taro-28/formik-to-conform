@@ -1,25 +1,18 @@
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test } from "vitest";
-import { convert } from "..";
 import { SampleForm as ConformSampleForm } from "./form.conform";
 import { SampleForm as FormikSampleForm } from "./form.formik";
-test("convert", async () => {
-  const formikFile = readFileSync(
-    path.join(__dirname, "form.formik.tsx"),
-    "utf-8",
-  );
-  const conformFile = readFileSync(
-    path.join(__dirname, "form.conform.tsx"),
-    "utf-8",
-  );
-  const result = await convert(formikFile);
-  expect(result).toEqual(conformFile);
-});
+import { testConvert } from "./utils/testConvert";
 
-describe("compornent test", () => {
+describe("form", async () => {
+  test("convert", async () =>
+    await testConvert(
+      path.join(__dirname, "form.formik.tsx"),
+      path.join(__dirname, "form.conform.tsx"),
+    ));
+
   afterEach(() => {
     cleanup();
   });

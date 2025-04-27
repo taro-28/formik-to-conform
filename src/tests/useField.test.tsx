@@ -6,24 +6,17 @@ import userEvent from "@testing-library/user-event";
 import { Form, Formik } from "formik";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { convert } from "..";
 import { SampleField as ConformSampleField } from "./useField.conform";
 import { SampleField as FormikSampleField } from "./useField.formik";
+import { testConvert } from "./utils/testConvert";
 
-test("convert", async () => {
-  const formikFile = readFileSync(
-    path.join(__dirname, "useField.formik.tsx"),
-    "utf-8",
-  );
-  const conformFile = readFileSync(
-    path.join(__dirname, "useField.conform.tsx"),
-    "utf-8",
-  );
-  const result = await convert(formikFile);
-  expect(result).toEqual(conformFile);
-});
+describe("useField", async () => {
+  test("convert", async () =>
+    await testConvert(
+      path.join(__dirname, "useField.formik.tsx"),
+      path.join(__dirname, "useField.conform.tsx"),
+    ));
 
-describe("compornent test", () => {
   afterEach(() => {
     cleanup();
   });
