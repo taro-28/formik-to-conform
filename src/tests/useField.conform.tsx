@@ -7,7 +7,12 @@ export const SampleField = () => {
   return (
     <div>
       <label htmlFor={id}>Name</label>
-      <input {...getInputProps(field, { type: "text" })} id={id} />
+      <input
+        {...getInputProps(field, {
+          type: "text",
+        })}
+        id={id}
+      />
     </div>
   );
 };
