@@ -21,10 +21,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "jsx": "react-jsx",
     "resolveJsonModule": true,
     "noEmit": true,
     "useDefineForClassFields": true
   },
-  "include": ["*"]
+  "include": ["src/**/*"],
+  "exclude": ["**/*/formik.*"]
 }
