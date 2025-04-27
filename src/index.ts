@@ -2,6 +2,78 @@ import jscodeshift, { type JSCodeshift, type JSXElement } from "jscodeshift";
 import { format } from "prettier";
 
 /**
+ * 要素を getInputProps 化する関数
+ */
+function transformToGetInputProps(
+  j: JSCodeshift,
+  formJSX: JSXElement,
+  elementSelector: string,
+  isField = false,
+) {
+  const elements = j(formJSX).find(j.JSXElement, {
+    openingElement: { name: { name: elementSelector } },
+  });
+
+  for (const elemPath of elements.paths()) {
+    const el = elemPath.node.openingElement;
+    const idAttr = el.attributes?.find(
+      (a) => a.type === "JSXAttribute" && a.name?.name === "id",
+    );
+    const nameAttr = isField
+      ? el.attributes?.find(
+          (a) => a.type === "JSXAttribute" && a.name?.name === "name",
+        )
+      : null;
+
+    // Use name attribute value if available, otherwise fall back to id
+    const fieldName =
+      nameAttr && "value" in nameAttr && nameAttr.value
+        ? nameAttr.value.type === "StringLiteral"
+          ? nameAttr.value.value
+          : null
+        : null;
+
+    const idValue =
+      idAttr && "value" in idAttr && idAttr.value
+        ? idAttr.value.type === "StringLiteral"
+          ? idAttr.value.value
+          : fieldName || "field"
+        : fieldName || "field";
+
+    const newAttrs = [
+      j.jsxSpreadAttribute(
+        j.callExpression(j.identifier("getInputProps"), [
+          j.memberExpression(
+            j.identifier("fields"),
+            j.identifier(fieldName || idValue),
+          ),
+          j.objectExpression([
+            j.property("init", j.identifier("type"), j.literal("text")),
+          ]),
+        ]),
+      ),
+      j.jsxAttribute(j.jsxIdentifier("type"), j.literal("text")),
+      idAttr && "value" in idAttr
+        ? j.jsxAttribute(j.jsxIdentifier("id"), j.literal(idValue))
+        : j.jsxAttribute(j.jsxIdentifier("id"), j.literal(idValue)),
+    ];
+
+    if (isField) {
+      // Create new input element and replace Field
+      const inputElement = j.jsxElement(
+        j.jsxOpeningElement(j.jsxIdentifier("input"), newAttrs, true),
+        null,
+        [],
+      );
+      elemPath.replace(inputElement);
+    } else {
+      // Update existing input's attributes
+      el.attributes = newAttrs;
+    }
+  }
+}
+
+/**
  * Formik → Conform 変換
  * @param code 変換対象コード（.tsx を想定）
  * @returns 変換後コード
@@ -116,93 +188,12 @@ export async function convert(code: string): Promise<string> {
         );
     }
 
-    /* ---- <input> を getInputProps 化 ---- */
-    const inputElements = j(formJSX).find(j.JSXElement, {
-      openingElement: { name: { name: "input" } },
-    });
-    for (const inputPath of inputElements.paths()) {
-      const el = inputPath.node.openingElement;
-      const idAttr = el.attributes?.find(
-        (a) => a.type === "JSXAttribute" && a.name?.name === "id",
-      );
-      // Handle both JSXAttribute and JSXSpreadAttribute types
-      const idValue =
-        idAttr && "value" in idAttr && idAttr.value
-          ? idAttr.value.type === "StringLiteral"
-            ? idAttr.value.value
-            : "field"
-          : "field";
+    /* ---- 要素を getInputProps 化 ---- */
+    // Transform <input> elements
+    transformToGetInputProps(j, formJSX, "input");
 
-      el.attributes = [
-        j.jsxSpreadAttribute(
-          j.callExpression(j.identifier("getInputProps"), [
-            j.memberExpression(j.identifier("fields"), j.identifier(idValue)),
-            j.objectExpression([
-              j.property("init", j.identifier("type"), j.literal("text")),
-            ]),
-          ]),
-        ),
-        j.jsxAttribute(j.jsxIdentifier("type"), j.literal("text")),
-        idAttr || j.jsxAttribute(j.jsxIdentifier("id"), j.literal(idValue)),
-      ];
-    }
-
-    /* ---- <Field> を getInputProps 化 ---- */
-    const fieldElements = j(formJSX).find(j.JSXElement, {
-      openingElement: { name: { name: "Field" } },
-    });
-    for (const fieldPath of fieldElements.paths()) {
-      const el = fieldPath.node.openingElement;
-      const idAttr = el.attributes?.find(
-        (a) => a.type === "JSXAttribute" && a.name?.name === "id",
-      );
-      const nameAttr = el.attributes?.find(
-        (a) => a.type === "JSXAttribute" && a.name?.name === "name",
-      );
-
-      // Use name attribute value if available, otherwise fall back to id
-      const fieldName =
-        nameAttr && "value" in nameAttr && nameAttr.value
-          ? nameAttr.value.type === "StringLiteral"
-            ? nameAttr.value.value
-            : null
-          : null;
-
-      const idValue =
-        idAttr && "value" in idAttr && idAttr.value
-          ? idAttr.value.type === "StringLiteral"
-            ? idAttr.value.value
-            : fieldName || "field"
-          : fieldName || "field";
-
-      // Create new input element with getInputProps
-      const inputElement = j.jsxElement(
-        j.jsxOpeningElement(
-          j.jsxIdentifier("input"),
-          [
-            j.jsxSpreadAttribute(
-              j.callExpression(j.identifier("getInputProps"), [
-                j.memberExpression(
-                  j.identifier("fields"),
-                  j.identifier(fieldName || idValue),
-                ),
-                j.objectExpression([
-                  j.property("init", j.identifier("type"), j.literal("text")),
-                ]),
-              ]),
-            ),
-            j.jsxAttribute(j.jsxIdentifier("type"), j.literal("text")),
-            j.jsxAttribute(j.jsxIdentifier("id"), j.literal(idValue)),
-          ],
-          true,
-        ),
-        null,
-        [],
-      );
-
-      // Replace Field with input
-      fieldPath.replace(inputElement);
-    }
+    // Transform <Field> elements
+    transformToGetInputProps(j, formJSX, "Field", true);
 
     /* ---- useForm 宣言をコンポーネント先頭へ挿入 ---- */
     const useFormDecl = j.variableDeclaration("const", [
