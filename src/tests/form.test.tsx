@@ -4,15 +4,15 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test } from "vitest";
 import { convert } from "..";
-import { SampleForm as ConformSampleForm } from "./conform.form";
-import { SampleForm as FormikSampleForm } from "./formik.form";
+import { SampleForm as ConformSampleForm } from "./form.conform";
+import { SampleForm as FormikSampleForm } from "./form.formik";
 test("convert", async () => {
   const formikFile = readFileSync(
-    path.join(__dirname, "formik.form.tsx"),
+    path.join(__dirname, "form.formik.tsx"),
     "utf-8",
   );
   const conformFile = readFileSync(
-    path.join(__dirname, "conform.form.tsx"),
+    path.join(__dirname, "form.conform.tsx"),
     "utf-8",
   );
   const result = await convert(formikFile);
