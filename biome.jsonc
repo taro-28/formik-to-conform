@@ -5,25 +5,10 @@
   },
   "linter": {
     "rules": {
-      "all": true
-      // "style": {
-      //   "useNamingConvention": "off",
-      //   "useBlockStatements": "off",
-      //   "noDefaultExport": "off",
-      //   "noNonNullAssertion": "off"
-      // },
-      // "correctness": {
-      //   "noNodejsModules": "off",
-      //   "useImportExtensions": "off",
-      //   "noUndeclaredDependencies": "off"
-      // },
-      // "complexity": {
-      //   "useLiteralKeys": "off"
-      // },
-      // "suspicious": {
-      //   "noExplicitAny": "off",
-      //   "noReactSpecificProps": "off"
-      // }
+      "all": true,
+      "style": {
+        "noDefaultExport": "off"
+      }
     }
   },
   "formatter": {
