@@ -1,12 +1,11 @@
-import { convert } from "..";
-import { test, expect, describe, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import type { ReactNode } from "react";
-import { BasicExample as FormikBasicExample } from "./formik.basicExample";
-import { BasicExample as ConformBasicExample } from "./conform.basicExample";
 import { cleanup, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
+import { afterEach, describe, expect, test } from "vitest";
+import { convert } from "..";
+import { BasicExample as ConformBasicExample } from "./conform.basicExample";
+import { BasicExample as FormikBasicExample } from "./formik.basicExample";
 test("convert", async () => {
   const formikFile = readFileSync(
     path.join(__dirname, "formik.basicExample.tsx"),
