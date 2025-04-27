@@ -147,6 +147,63 @@ export async function convert(code: string): Promise<string> {
       ];
     }
 
+    /* ---- <Field> を getInputProps 化 ---- */
+    const fieldElements = j(formJSX).find(j.JSXElement, {
+      openingElement: { name: { name: "Field" } },
+    });
+    for (const fieldPath of fieldElements.paths()) {
+      const el = fieldPath.node.openingElement;
+      const idAttr = el.attributes?.find(
+        (a) => a.type === "JSXAttribute" && a.name?.name === "id",
+      );
+      const nameAttr = el.attributes?.find(
+        (a) => a.type === "JSXAttribute" && a.name?.name === "name",
+      );
+
+      // Use name attribute value if available, otherwise fall back to id
+      const fieldName =
+        nameAttr && "value" in nameAttr && nameAttr.value
+          ? nameAttr.value.type === "StringLiteral"
+            ? nameAttr.value.value
+            : null
+          : null;
+
+      const idValue =
+        idAttr && "value" in idAttr && idAttr.value
+          ? idAttr.value.type === "StringLiteral"
+            ? idAttr.value.value
+            : fieldName || "field"
+          : fieldName || "field";
+
+      // Create new input element with getInputProps
+      const inputElement = j.jsxElement(
+        j.jsxOpeningElement(
+          j.jsxIdentifier("input"),
+          [
+            j.jsxSpreadAttribute(
+              j.callExpression(j.identifier("getInputProps"), [
+                j.memberExpression(
+                  j.identifier("fields"),
+                  j.identifier(fieldName || idValue),
+                ),
+                j.objectExpression([
+                  j.property("init", j.identifier("type"), j.literal("text")),
+                ]),
+              ]),
+            ),
+            j.jsxAttribute(j.jsxIdentifier("type"), j.literal("text")),
+            j.jsxAttribute(j.jsxIdentifier("id"), j.literal(idValue)),
+          ],
+          true,
+        ),
+        null,
+        [],
+      );
+
+      // Replace Field with input
+      fieldPath.replace(inputElement);
+    }
+
     /* ---- useForm 宣言をコンポーネント先頭へ挿入 ---- */
     const useFormDecl = j.variableDeclaration("const", [
       j.variableDeclarator(
