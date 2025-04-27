@@ -4,8 +4,8 @@ export const SampleForm = () => {
   return (
     <Formik
       initialValues={{
-        rawTextInput: "initial rawTextInput value",
-        fieldTextInput: "initial fieldTextInput value",
+        rawInput: "initial rawInput value",
+        fieldInput: "initial fieldInput value",
       }}
       onSubmit={(values) => {
         console.log(values);
@@ -13,14 +13,14 @@ export const SampleForm = () => {
     >
       {(props) => (
         <form onSubmit={props.handleSubmit}>
-          <label htmlFor="rawTextInput">Raw Text Input</label>
+          <label htmlFor="rawInput">Raw Input</label>
           <input
-            id="rawTextInput"
+            id="rawInput"
             onChange={props.handleChange}
-            value={props.values.rawTextInput}
+            value={props.values.rawInput}
           />
-          <label htmlFor="fieldTextInput">Field Text Input</label>
-          <Field name="fieldTextInput" id="fieldTextInput" />
+          <label htmlFor="fieldInput">Field Input</label>
+          <Field name="fieldInput" id="fieldInput" />
           <button type="submit">Submit</button>
         </form>
       )}

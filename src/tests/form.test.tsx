@@ -37,13 +37,13 @@ describe("compornent test", () => {
 
     expect(
       screen.getByRole<HTMLInputElement>("textbox", {
-        name: "Raw Text Input",
+        name: "Raw Input",
       }).value,
-    ).toBe("initial rawTextInput value");
+    ).toBe("initial rawInput value");
     expect(
       screen.getByRole<HTMLInputElement>("textbox", {
-        name: "Field Text Input",
+        name: "Field Input",
       }).value,
-    ).toBe("initial fieldTextInput value");
+    ).toBe("initial fieldInput value");
   });
 });

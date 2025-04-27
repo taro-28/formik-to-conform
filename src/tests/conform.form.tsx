@@ -3,28 +3,28 @@ import { getInputProps, useForm } from "@conform-to/react";
 export const SampleForm = () => {
   const [form, fields] = useForm({
     defaultValue: {
-      rawTextInput: "initial rawTextInput value",
-      fieldTextInput: "initial fieldTextInput value",
+      rawInput: "initial rawInput value",
+      fieldInput: "initial fieldInput value",
     },
   });
 
   return (
     <form onSubmit={form.onSubmit}>
-      <label htmlFor="rawTextInput">Raw Text Input</label>
+      <label htmlFor="rawInput">Raw Input</label>
       <input
-        {...getInputProps(fields.rawTextInput, {
+        {...getInputProps(fields.rawInput, {
           type: "text",
         })}
         type="text"
-        id="rawTextInput"
+        id="rawInput"
       />
-      <label htmlFor="fieldTextInput">Field Text Input</label>
+      <label htmlFor="fieldInput">Field Input</label>
       <input
-        {...getInputProps(fields.fieldTextInput, {
+        {...getInputProps(fields.fieldInput, {
           type: "text",
         })}
         type="text"
-        id="fieldTextInput"
+        id="fieldInput"
       />
       <button type="submit">Submit</button>
     </form>
