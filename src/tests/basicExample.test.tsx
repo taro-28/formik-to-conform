@@ -7,7 +7,7 @@ import { BasicExample as FormikBasicExample } from "./formik.basicExample";
 import { BasicExample as ConformBasicExample } from "./conform.basicExample";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-test("convert", () => {
+test("convert", async () => {
   const formikFile = readFileSync(
     path.join(__dirname, "formik.basicExample.tsx"),
     "utf-8",
@@ -16,7 +16,7 @@ test("convert", () => {
     path.join(__dirname, "conform.basicExample.tsx"),
     "utf-8",
   );
-  const result = convert(formikFile);
+  const result = await convert(formikFile);
   expect(result).toEqual(conformFile);
 });
 
