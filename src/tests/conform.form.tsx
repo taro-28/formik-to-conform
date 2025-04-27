@@ -5,6 +5,7 @@ export const SampleForm = () => {
     defaultValue: {
       rawInput: "initial rawInput value",
       fieldInput: "initial fieldInput value",
+      manyAttributesInput: "initial manyAttributesInput value",
     },
   });
 
@@ -15,7 +16,6 @@ export const SampleForm = () => {
         {...getInputProps(fields.rawInput, {
           type: "text",
         })}
-        type="text"
         id="rawInput"
       />
       <label htmlFor="fieldInput">Field Input</label>
@@ -23,8 +23,16 @@ export const SampleForm = () => {
         {...getInputProps(fields.fieldInput, {
           type: "text",
         })}
-        type="text"
         id="fieldInput"
+      />
+      <label htmlFor="manyAttributesInput">Many Attributes Input</label>
+      <input
+        {...getInputProps(fields.manyAttributesInput, {
+          type: "email",
+          placeholder: "placeholder",
+          disabled: false,
+        })}
+        id="manyAttributesInput"
       />
       <button type="submit">Submit</button>
     </form>

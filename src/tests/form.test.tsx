@@ -45,5 +45,10 @@ describe("compornent test", () => {
         name: "Field Input",
       }).value,
     ).toBe("initial fieldInput value");
+    expect(
+      screen.getByRole<HTMLInputElement>("textbox", {
+        name: "Many Attributes Input",
+      }).value,
+    ).toBe("initial manyAttributesInput value");
   });
 });

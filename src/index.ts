@@ -3,6 +3,7 @@ import jscodeshift, {
   type JSXElement,
   type JSXIdentifier,
   type JSXNamespacedName,
+  type Expression,
 } from "jscodeshift";
 import { format } from "prettier";
 
@@ -60,6 +61,25 @@ function isFunctionExpression(node: unknown): node is {
 }
 
 /**
+ * JSX式コンテナであるかをチェックする型ガード
+ */
+function isJSXExpressionContainer(value: unknown): value is {
+  type: "JSXExpressionContainer";
+  expression: { type: string } & Expression;
+} {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "type" in value &&
+    value.type === "JSXExpressionContainer" &&
+    "expression" in value &&
+    value.expression !== null &&
+    typeof value.expression === "object" &&
+    "type" in value.expression
+  );
+}
+
+/**
  * 要素を getInputProps 化する関数
  */
 function transformToGetInputProps(
@@ -87,6 +107,105 @@ function transformToGetInputProps(
     const fieldName = getAttributeValue(nameAttr);
     const idValue = getAttributeValue(idAttr) || fieldName || "field";
 
+    // Collect all existing attributes to preserve
+    const typeAttr = el.attributes?.find(
+      (a) => a.type === "JSXAttribute" && a.name?.name === "type",
+    );
+    const placeholderAttr = el.attributes?.find(
+      (a) => a.type === "JSXAttribute" && a.name?.name === "placeholder",
+    );
+    const disabledAttr = el.attributes?.find(
+      (a) => a.type === "JSXAttribute" && a.name?.name === "disabled",
+    );
+
+    // Build props for getInputProps
+    const getInputPropsProperties = [];
+
+    // Handle type attribute
+    if (typeAttr && typeAttr.type === "JSXAttribute" && typeAttr.value) {
+      if (isStringLiteral(typeAttr.value)) {
+        getInputPropsProperties.push(
+          j.property(
+            "init",
+            j.identifier("type"),
+            j.literal(typeAttr.value.value),
+          ),
+        );
+      } else if (
+        isJSXExpressionContainer(typeAttr.value) &&
+        typeAttr.value.expression.type !== "JSXEmptyExpression"
+      ) {
+        getInputPropsProperties.push(
+          j.property("init", j.identifier("type"), typeAttr.value.expression),
+        );
+      } else {
+        getInputPropsProperties.push(
+          j.property("init", j.identifier("type"), j.literal("text")),
+        );
+      }
+    } else {
+      getInputPropsProperties.push(
+        j.property("init", j.identifier("type"), j.literal("text")),
+      );
+    }
+
+    // Handle placeholder attribute
+    if (
+      placeholderAttr &&
+      placeholderAttr.type === "JSXAttribute" &&
+      placeholderAttr.value
+    ) {
+      if (isStringLiteral(placeholderAttr.value)) {
+        getInputPropsProperties.push(
+          j.property(
+            "init",
+            j.identifier("placeholder"),
+            j.literal(placeholderAttr.value.value),
+          ),
+        );
+      } else if (
+        isJSXExpressionContainer(placeholderAttr.value) &&
+        placeholderAttr.value.expression.type !== "JSXEmptyExpression"
+      ) {
+        getInputPropsProperties.push(
+          j.property(
+            "init",
+            j.identifier("placeholder"),
+            placeholderAttr.value.expression,
+          ),
+        );
+      }
+    }
+
+    // Handle disabled attribute
+    if (disabledAttr && disabledAttr.type === "JSXAttribute") {
+      if (disabledAttr.value === null) {
+        // <input disabled /> case
+        getInputPropsProperties.push(
+          j.property("init", j.identifier("disabled"), j.literal(true)),
+        );
+      } else if (isStringLiteral(disabledAttr.value)) {
+        getInputPropsProperties.push(
+          j.property(
+            "init",
+            j.identifier("disabled"),
+            j.literal(disabledAttr.value.value === "true"),
+          ),
+        );
+      } else if (
+        isJSXExpressionContainer(disabledAttr.value) &&
+        disabledAttr.value.expression.type !== "JSXEmptyExpression"
+      ) {
+        getInputPropsProperties.push(
+          j.property(
+            "init",
+            j.identifier("disabled"),
+            disabledAttr.value.expression,
+          ),
+        );
+      }
+    }
+
     const newAttrs = [
       j.jsxSpreadAttribute(
         j.callExpression(j.identifier("getInputProps"), [
@@ -94,12 +213,9 @@ function transformToGetInputProps(
             j.identifier("fields"),
             j.identifier(fieldName || idValue),
           ),
-          j.objectExpression([
-            j.property("init", j.identifier("type"), j.literal("text")),
-          ]),
+          j.objectExpression(getInputPropsProperties),
         ]),
       ),
-      j.jsxAttribute(j.jsxIdentifier("type"), j.literal("text")),
       j.jsxAttribute(j.jsxIdentifier("id"), j.literal(idValue)),
     ];
 
