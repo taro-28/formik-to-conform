@@ -276,6 +276,53 @@ function transformToGetInputProps(
 }
 
 /**
+ * Transform inputs that use Formik's useField to Conform's getInputProps
+ */
+function transformUseFieldInputs(
+  j: JSCodeshift,
+  root: ReturnType<JSCodeshift>,
+) {
+  const inputElements = root.find(j.JSXElement, {
+    openingElement: { name: { name: "input" } },
+  });
+
+  for (const inputPath of inputElements.paths()) {
+    const el = inputPath.node.openingElement;
+    const jsxSpreadAttrs =
+      el.attributes?.filter(
+        (attr: { type: string }) => attr.type === "JSXSpreadAttribute",
+      ) || [];
+
+    // Look for inputs with {...field} spread attributes
+    if (jsxSpreadAttrs.length > 0) {
+      for (const spreadAttr of jsxSpreadAttrs) {
+        if (
+          spreadAttr.type === "JSXSpreadAttribute" &&
+          spreadAttr.argument.type === "Identifier" &&
+          spreadAttr.argument.name === "field"
+        ) {
+          // Create the getInputProps expression
+          const getInputPropsSpread = j.jsxSpreadAttribute(
+            j.callExpression(j.identifier("getInputProps"), [
+              j.identifier("field"),
+              j.objectExpression([
+                j.property("init", j.identifier("type"), j.literal("text")),
+              ]),
+            ]),
+          );
+
+          // Replace {...field} with {...getInputProps(field, { type: "text" })}
+          const newAttrs = [...(el.attributes || [])];
+          const spreadIndex = newAttrs.indexOf(spreadAttr);
+          newAttrs.splice(spreadIndex, 1, getInputPropsSpread);
+          el.attributes = newAttrs;
+        }
+      }
+    }
+  }
+}
+
+/**
  * Formik → Conform 変換
  * @param code 変換対象コード（.tsx を想定）
  * @returns 変換後コード
@@ -287,8 +334,21 @@ export async function convert(code: string): Promise<string> {
 
   /* ------------------------------ import 変換 ------------------------------ */
 
+  // Check if file contains useField from formik
+  const formikImports = root.find(j.ImportDeclaration, {
+    source: { value: "formik" },
+  });
+
+  const hasUseField =
+    formikImports
+      .find(j.ImportSpecifier, { imported: { name: "useField" } })
+      .size() > 0;
+
+  // Check if file contains Formik component
+  const hasFormik = root.findJSXElements("Formik").size() > 0;
+
   // 1) Formik import を削除
-  root.find(j.ImportDeclaration, { source: { value: "formik" } }).remove();
+  formikImports.remove();
 
   // 2) Conform import が無ければ追加
   if (
@@ -298,11 +358,19 @@ export async function convert(code: string): Promise<string> {
       })
       .size() === 0
   ) {
+    // Determine which imports are needed
+    const specifiers = [j.importSpecifier(j.identifier("getInputProps"))];
+
+    if (hasFormik) {
+      specifiers.push(j.importSpecifier(j.identifier("useForm")));
+    }
+
+    if (hasUseField) {
+      specifiers.push(j.importSpecifier(j.identifier("useField")));
+    }
+
     const conformImport = j.importDeclaration(
-      [
-        j.importSpecifier(j.identifier("getInputProps")),
-        j.importSpecifier(j.identifier("useForm")),
-      ],
+      specifiers,
       j.literal("@conform-to/react"),
     );
 
@@ -310,6 +378,12 @@ export async function convert(code: string): Promise<string> {
     firstImport.size()
       ? firstImport.insertBefore(conformImport)
       : root.get().node.program.body.unshift(conformImport);
+  }
+
+  /* ------------------ Transform useField in components ------------------ */
+  // Replace instances of useField from formik to @conform-to/react
+  if (hasUseField) {
+    transformUseFieldInputs(j, root);
   }
 
   /* --------------------------- <Formik> 置き換え --------------------------- */
