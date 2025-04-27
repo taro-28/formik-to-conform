@@ -103,6 +103,13 @@ function transformToGetInputProps(
         )
       : null;
 
+    // Check for custom component via 'as' prop for Field
+    const asAttr = isField
+      ? el.attributes?.find(
+          (a) => a.type === "JSXAttribute" && a.name?.name === "as",
+        )
+      : null;
+
     // Use name attribute value if available, otherwise fall back to id
     const fieldName = getAttributeValue(nameAttr);
     const idValue = getAttributeValue(idAttr) || fieldName || "field";
@@ -220,13 +227,45 @@ function transformToGetInputProps(
     ];
 
     if (isField) {
-      // Create new input element and replace Field
-      const inputElement = j.jsxElement(
-        j.jsxOpeningElement(j.jsxIdentifier("input"), newAttrs, true),
-        null,
-        [],
-      );
-      elemPath.replace(inputElement);
+      // Handle Field with custom component (as prop)
+      if (asAttr && asAttr.type === "JSXAttribute" && asAttr.value) {
+        let customComponentName: string;
+
+        if (
+          isJSXExpressionContainer(asAttr.value) &&
+          asAttr.value.expression.type === "Identifier"
+        ) {
+          customComponentName = asAttr.value.expression.name;
+
+          // Create new element with the custom component
+          const customElement = j.jsxElement(
+            j.jsxOpeningElement(
+              j.jsxIdentifier(customComponentName),
+              newAttrs,
+              true,
+            ),
+            null,
+            [],
+          );
+          elemPath.replace(customElement);
+        } else {
+          // Create new input element as fallback
+          const inputElement = j.jsxElement(
+            j.jsxOpeningElement(j.jsxIdentifier("input"), newAttrs, true),
+            null,
+            [],
+          );
+          elemPath.replace(inputElement);
+        }
+      } else {
+        // Create new input element and replace Field
+        const inputElement = j.jsxElement(
+          j.jsxOpeningElement(j.jsxIdentifier("input"), newAttrs, true),
+          null,
+          [],
+        );
+        elemPath.replace(inputElement);
+      }
     } else {
       // Update existing input's attributes
       el.attributes = newAttrs;
