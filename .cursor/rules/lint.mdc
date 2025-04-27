@@ -1,0 +1,9 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Lint
+
+To run type check: `pnpm type-check`
+To run lint: `pnpm check-write`

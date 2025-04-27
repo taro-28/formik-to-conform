@@ -1,0 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Project Overview
+
+This project is a codemod tool for converting React forms from Formik to Conform. It uses jscodeshift to transform the code.

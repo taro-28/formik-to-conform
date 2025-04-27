@@ -1,0 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Testing
+
+To run tests: `pnpm test  --run`
