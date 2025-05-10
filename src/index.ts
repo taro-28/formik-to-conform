@@ -108,15 +108,19 @@ function findAttribute(
  * JSX属性値を抽出し、型やデフォルト値に応じて変換する共通関数
  */
 function extractJSXAttributeValue(
-  j: JSCodeshift,
+  _: JSCodeshift,
   attr: AttributeLike | null | undefined,
   opts: {
     defaultValue?: unknown;
     toValue?: (value: unknown) => unknown;
   } = {},
 ) {
-  if (!attr || attr.type !== "JSXAttribute") return opts.defaultValue;
-  if (attr.value == null) return opts.defaultValue;
+  if (!attr || attr.type !== "JSXAttribute") {
+    return opts.defaultValue;
+  }
+  if (attr.value == null) {
+    return opts.defaultValue;
+  }
   if (isStringLiteral(attr.value)) {
     return opts.toValue ? opts.toValue(attr.value.value) : attr.value.value;
   }
@@ -191,7 +195,7 @@ function transformToGetInputProps(
         value !== null &&
         !(typeof value === "object" && Object.keys(value).length === 0)
       ) {
-        let propValue: any;
+        let propValue: import("jscodeshift").Expression;
         if (
           typeof value === "string" ||
           typeof value === "number" ||
@@ -199,12 +203,14 @@ function transformToGetInputProps(
         ) {
           propValue = j.literal(value);
         } else if (typeof value === "object" && "type" in value) {
-          propValue = value;
+          propValue = value as import("jscodeshift").Expression;
         } else {
           continue; // 不正な値はスキップ
         }
+
         getInputPropsProperties.push(
-          j.property("init", j.identifier(name), propValue),
+          // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+          j.property("init", j.identifier(name), propValue as any),
         );
       }
     }
@@ -384,7 +390,7 @@ export async function convert(code: string): Promise<string> {
   const hasUseFormikContext = code.includes("useFormikContext");
 
   // If code doesn't use Formik at all, return it unchanged
-  if (!hasFormikImport && !hasUseFormikContext) {
+  if (!(hasFormikImport || hasUseFormikContext)) {
     return code;
   }
 
@@ -518,7 +524,7 @@ export async function convert(code: string): Promise<string> {
     .remove();
 
   // Add conform import at the beginning
-  const specifiers = [];
+  const specifiers: import("jscodeshift").ImportSpecifier[] = [];
 
   // Add appropriate imports based on what's being used
   if (hasUseFormikContext) {
