@@ -18,12 +18,16 @@ type FieldValue = {
 };
 
 export const SampleUseField2 = () => {
-  const [{ value }, , { setValue }] = useField<FieldValue>("user");
+  const [{ value }, , { setValue, setTouched }] = useField<FieldValue>("user");
+  const handleClick = async () => {
+    await setValue({ name: "", age: 20 });
+    await setTouched(true);
+  };
 
   return (
     <div>
       User: {JSON.stringify(value)}
-      <button type="button" onClick={() => setValue({ name: "", age: 20 })}>
+      <button type="button" onClick={handleClick}>
         Reset
       </button>
     </div>

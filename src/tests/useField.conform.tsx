@@ -27,11 +27,16 @@ export const SampleUseField2 = () => {
   const value = field.value;
   const setValue = (value: FieldValue, shouldValidate?: boolean) =>
     form.update({ name: "user", value, validated: !!shouldValidate });
+  const setTouched = (_: boolean, __?: boolean) => {};
+  const handleClick = async () => {
+    setValue({ name: "", age: 20 });
+    setTouched(true);
+  };
 
   return (
     <div>
       User: {JSON.stringify(value)}
-      <button type="button" onClick={() => setValue({ name: "", age: 20 })}>
+      <button type="button" onClick={handleClick}>
         Reset
       </button>
     </div>
