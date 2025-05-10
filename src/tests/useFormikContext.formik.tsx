@@ -4,7 +4,7 @@ type FormValues = {
   name: string;
 };
 
-export const SampleUseFormikContext = () => {
+export const SampleUseFormikContext1 = () => {
   const { values, setFieldValue, setFieldTouched, isSubmitting } =
     useFormikContext<FormValues>();
   const handleClick = () => {
@@ -20,4 +20,10 @@ export const SampleUseFormikContext = () => {
       </button>
     </div>
   );
+};
+
+export const SampleUseFormikContext2 = () => {
+  const { values } = useFormikContext<FormValues>();
+
+  return <div>Values: {JSON.stringify(values)}</div>;
 };

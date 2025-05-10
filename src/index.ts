@@ -553,54 +553,134 @@ export async function convert(code: string): Promise<string> {
     });
 
     for (const path of useFormMetadataVars.paths()) {
-      path.node.id = j.identifier("form");
-      path.parent.node.declarations = [
-        j.variableDeclarator(j.identifier("form"), path.node.init),
-      ];
-      const insertDecls = [
-        j.variableDeclaration("const", [
-          j.variableDeclarator(
-            j.identifier("values"),
-            j.memberExpression(j.identifier("form"), j.identifier("value")),
-          ),
-        ]),
-        j.variableDeclaration("const", [
-          j.variableDeclarator(
-            j.identifier("update"),
-            j.memberExpression(j.identifier("form"), j.identifier("update")),
-          ),
-        ]),
-        recast.parse(
-          "const setFieldValue = (name: string, value: any, shouldValidate?: boolean) => { update({ name, value, validated: !!shouldValidate }); };",
-          { parser: recastTS },
-        ).program.body[0],
-        (() => {
-          const node = recast.parse(
-            "const setFieldTouched = (_: string, __: boolean) => {};",
-            { parser: recastTS },
-          ).program.body[0];
-          node.comments = [
-            { type: "CommentLine", value: " cannot convert to conform" },
-          ];
-          return node;
-        })(),
-        j.variableDeclaration("const", [
-          j.variableDeclarator(j.identifier("isSubmitting"), j.literal(false)),
-        ]),
-      ];
-      const parentBody = j(path)
-        .closest(j.Function, () => true)
-        .get(0).node.body.body;
-      // form宣言の直後に挿入
-      const formIdx = parentBody.findIndex(
-        (stmt: { type?: string; declarations?: unknown[] }) =>
-          stmt.type === "VariableDeclaration" &&
-          stmt.declarations &&
-          (stmt.declarations[0] as { id?: { name?: string } })?.id?.name ===
-            "form",
-      );
-      if (formIdx !== -1) {
-        parentBody.splice(formIdx + 1, 0, ...insertDecls);
+      const origId = path.node.id;
+      if (origId.type === "ObjectPattern") {
+        const propNames = origId.properties
+          .filter(
+            (p): p is import("jscodeshift").Property =>
+              p.type === "Property" && p.key.type === "Identifier",
+          )
+          .map((p) => (p.key as import("jscodeshift").Identifier).name);
+
+        // 関数body内で補助変数が参照されているかも判定
+        const funcPath = j(path).closest(j.Function, () => true);
+        let referencedNames: string[] = [];
+        if (funcPath.size() > 0) {
+          const funcNode = funcPath.get(0).node;
+          referencedNames = [
+            "setFieldValue",
+            "setFieldTouched",
+            "isSubmitting",
+            "update",
+            "values",
+          ].filter(
+            (name) => j(funcNode).find(j.Identifier, { name }).size() > 0,
+          );
+        }
+
+        // values, setFieldValue, setFieldTouched, isSubmitting のいずれかが含まれていれば全部生成
+        const needsAll =
+          propNames.some((name) =>
+            ["setFieldValue", "setFieldTouched", "isSubmitting"].includes(name),
+          ) ||
+          (propNames.includes("values") && propNames.length > 1) ||
+          referencedNames.some((name) =>
+            [
+              "setFieldValue",
+              "setFieldTouched",
+              "isSubmitting",
+              "update",
+            ].includes(name),
+          );
+
+        path.node.id = j.identifier("form");
+        path.parent.node.declarations = [
+          j.variableDeclarator(j.identifier("form"), path.node.init),
+        ];
+
+        const insertDecls = [];
+        if (needsAll) {
+          insertDecls.push(
+            j.variableDeclaration("const", [
+              j.variableDeclarator(
+                j.identifier("values"),
+                j.memberExpression(j.identifier("form"), j.identifier("value")),
+              ),
+            ]),
+            j.variableDeclaration("const", [
+              j.variableDeclarator(
+                j.identifier("update"),
+                j.memberExpression(
+                  j.identifier("form"),
+                  j.identifier("update"),
+                ),
+              ),
+            ]),
+            recast.parse(
+              "const setFieldValue = (name: string, value: any, shouldValidate?: boolean) => { update({ name, value, validated: !!shouldValidate }); };",
+              { parser: recastTS },
+            ).program.body[0],
+            (() => {
+              const node = recast.parse(
+                "const setFieldTouched = (_: string, __: boolean) => {};",
+                { parser: recastTS },
+              ).program.body[0];
+              node.comments = [
+                { type: "CommentLine", value: " cannot convert to conform" },
+              ];
+              return node;
+            })(),
+            j.variableDeclaration("const", [
+              j.variableDeclarator(
+                j.identifier("isSubmitting"),
+                j.literal(false),
+              ),
+            ]),
+          );
+        } else if (
+          propNames.includes("values") ||
+          referencedNames.includes("values")
+        ) {
+          insertDecls.push(
+            j.variableDeclaration("const", [
+              j.variableDeclarator(
+                j.identifier("values"),
+                j.memberExpression(j.identifier("form"), j.identifier("value")),
+              ),
+            ]),
+          );
+        }
+        // form宣言の直後に挿入
+        const parentBody = j(path)
+          .closest(j.Function, () => true)
+          .get(0).node.body.body;
+        const formIdx = parentBody.findIndex(
+          (stmt: import("jscodeshift").Statement) => {
+            if (
+              stmt.type !== "VariableDeclaration" ||
+              !("declarations" in stmt)
+            ) {
+              return false;
+            }
+            const decls = (stmt as import("jscodeshift").VariableDeclaration)
+              .declarations;
+            if (!Array.isArray(decls) || decls.length === 0) return false;
+            const decl = decls[0];
+            if (
+              decl &&
+              decl.type === "VariableDeclarator" &&
+              decl.id &&
+              decl.id.type === "Identifier" &&
+              decl.id.name === "form"
+            ) {
+              return true;
+            }
+            return false;
+          },
+        );
+        if (formIdx !== -1 && insertDecls.length > 0) {
+          parentBody.splice(formIdx + 1, 0, ...insertDecls);
+        }
       }
     }
   }

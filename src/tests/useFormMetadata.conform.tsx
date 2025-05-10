@@ -4,7 +4,7 @@ type FormValues = {
   name: string;
 };
 
-export const SampleUseFormikContext = () => {
+export const SampleUseFormikContext1 = () => {
   const form = useFormMetadata<FormValues>();
   const values = form.value;
   const update = form.update;
@@ -31,4 +31,11 @@ export const SampleUseFormikContext = () => {
       </button>
     </div>
   );
+};
+
+export const SampleUseFormikContext2 = () => {
+  const form = useFormMetadata<FormValues>();
+  const values = form.value;
+
+  return <div>Values: {JSON.stringify(values)}</div>;
 };
