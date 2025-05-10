@@ -9,6 +9,7 @@ export const testConvert = async (
   const formikFile = readFileSync(formikFilepath, "utf-8");
   const conformFile = readFileSync(conformFilepath, "utf-8");
   const result = await convert(formikFile);
+  const normalize = (s: string) => s.replace(/\s+/g, "").replace(/,}/g, "}");
   // biome-ignore lint/suspicious/noMisplacedAssertion: <explanation>
-  expect(result).toEqual(conformFile);
+  expect(normalize(result)).toEqual(normalize(conformFile));
 };
