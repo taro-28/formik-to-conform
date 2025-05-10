@@ -1,7 +1,7 @@
 import { useField } from "formik";
 import { useId } from "react";
 
-export const SampleField = () => {
+export const SampleUseField1 = () => {
   const [field] = useField<string>("name");
   const id = useId();
   return (

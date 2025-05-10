@@ -5,8 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { Form, Formik } from "formik";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { SampleField as ConformSampleField } from "./useField.conform";
-import { SampleField as FormikSampleField } from "./useField.formik";
+import { SampleUseField1 as ConformSampleField } from "./useField.conform";
+import { SampleUseField1 as FormikSampleField } from "./useField.formik";
 import { testConvert } from "./utils/testConvert";
 
 describe("useField", async () => {
