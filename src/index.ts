@@ -323,6 +323,41 @@ function transformUseFieldInputs(
 }
 
 /**
+ * Transform <Form> component from Formik to regular <form> elements
+ */
+function transformFormComponents(
+  j: JSCodeshift,
+  root: ReturnType<JSCodeshift>,
+) {
+  const formElements = root.findJSXElements("Form");
+  for (const path of formElements.paths()) {
+    // Create a new form element
+    const formElement = j.jsxElement(
+      j.jsxOpeningElement(
+        j.jsxIdentifier("form"),
+        [
+          // Add the onSubmit attribute that uses form.onSubmit
+          j.jsxAttribute(
+            j.jsxIdentifier("onSubmit"),
+            j.jsxExpressionContainer(
+              j.memberExpression(
+                j.identifier("form"),
+                j.identifier("onSubmit"),
+              ),
+            ),
+          ),
+        ],
+        false,
+      ),
+      j.jsxClosingElement(j.jsxIdentifier("form")),
+      path.node.children,
+    );
+
+    path.replace(formElement);
+  }
+}
+
+/**
  * Formik → Conform 変換
  * @param code 変換対象コード（.tsx を想定）
  * @returns 変換後コード
@@ -385,6 +420,9 @@ export async function convert(code: string): Promise<string> {
   if (hasUseField) {
     transformUseFieldInputs(j, root);
   }
+
+  // Transform Form components to form elements
+  transformFormComponents(j, root);
 
   /* --------------------------- <Formik> 置き換え --------------------------- */
 
