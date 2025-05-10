@@ -54,10 +54,9 @@ export const SampleForm = () => {
 
 export const SampleFormWithFormComponent = () => {
   const [form, fields] = useForm({
-    defaultValue: {
-      name: "",
-    },
+    defaultValue: { name: "" },
   });
+
   return (
     <form onSubmit={form.onSubmit}>
       <label htmlFor="name">Name</label>
