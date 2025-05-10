@@ -11,7 +11,7 @@
 - 🏃 `Formik` Component
   - 🙌 `initialValues`
   - 🙌 `onSubmit`
-  - 💤 `validationSchema`
+  - 🙌 `validationSchema`
 - 🙌 `Field` Component
 - 🙌 `Form` Component
 - 🏃 `useField` hook
