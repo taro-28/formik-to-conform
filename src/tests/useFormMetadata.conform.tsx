@@ -5,7 +5,7 @@ type FormValues = {
 };
 
 export const DisplayValues = () => {
-  const { value: values } = useFormMetadata<FormValues>(undefined);
+  const { value: values } = useFormMetadata<FormValues>();
 
   return <div>Values: {JSON.stringify(values)}</div>;
 };
