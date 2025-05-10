@@ -478,9 +478,8 @@ export async function convert(code: string): Promise<string> {
       // Check if there's values in the destructuring
       if (path.node.id.type === "ObjectPattern") {
         const properties = path.node.id.properties;
-        let hasValues = false;
         let hasSetFieldValue = false;
-        let needsUpdate = false;
+        let hasUpdate = false;
         for (let i = 0; i < properties.length; i++) {
           const prop = properties[i];
           if (
@@ -491,7 +490,6 @@ export async function convert(code: string): Promise<string> {
           ) {
             // values → value: values
             if (prop.key.name === "values") {
-              hasValues = true;
               const newProp = j.property(
                 "init",
                 j.identifier("value"),
@@ -503,34 +501,23 @@ export async function convert(code: string): Promise<string> {
             // setFieldValue → remove from destructure, but remember to add update
             if (prop.key.name === "setFieldValue") {
               hasSetFieldValue = true;
-              needsUpdate = true;
               properties.splice(i, 1);
               i--;
             }
+            // update → already present
+            if (prop.key.name === "update") {
+              hasUpdate = true;
+            }
           }
         }
-        // If setFieldValue was present, add update to the destructure if not already present
-        if (
-          hasSetFieldValue &&
-          !properties.some(
-            (p) =>
-              p.type === "ObjectProperty" &&
-              p.key.type === "Identifier" &&
-              p.key.name === "update",
-          )
-        ) {
-          // Use shorthand property for update
+        // setFieldValueがあった場合はupdateを必ず追加
+        if (hasSetFieldValue && !hasUpdate) {
           const updateProp = j.property(
             "init",
             j.identifier("update"),
             j.identifier("update"),
           );
-          if (
-            updateProp.type === "Property" ||
-            updateProp.type === "ObjectProperty"
-          ) {
-            updateProp.shorthand = true;
-          }
+          updateProp.shorthand = true;
           properties.push(updateProp);
         }
         // If setFieldValue was present, insert setFieldValue function after the variable declaration
