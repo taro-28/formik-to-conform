@@ -1,4 +1,4 @@
-import { Field, Formik } from "formik";
+import { Field, Form, Formik } from "formik";
 import type { JSX } from "react";
 
 const CustomInput = (props: JSX.IntrinsicElements["input"]) => (
@@ -47,6 +47,25 @@ export const SampleForm = () => {
           />
           <button type="submit">Submit</button>
         </form>
+      )}
+    </Formik>
+  );
+};
+
+export const SampleFormWithFormComponent = () => {
+  return (
+    <Formik
+      initialValues={{ name: "" }}
+      onSubmit={(values) => {
+        console.log(values);
+      }}
+    >
+      {() => (
+        <Form>
+          <label htmlFor="name">Name</label>
+          <Field name="name" id="name" />
+          <button type="submit">Submit</button>
+        </Form>
       )}
     </Formik>
   );

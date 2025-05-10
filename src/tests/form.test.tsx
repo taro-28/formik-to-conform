@@ -2,8 +2,14 @@ import path from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test } from "vitest";
-import { SampleForm as ConformSampleForm } from "./form.conform";
-import { SampleForm as FormikSampleForm } from "./form.formik";
+import {
+  SampleForm as ConformSampleForm,
+  SampleFormWithFormComponent as ConformSampleFormWithFormComponent,
+} from "./form.conform";
+import {
+  SampleForm as FormikSampleForm,
+  SampleFormWithFormComponent as FormikSampleFormWithFormComponent,
+} from "./form.formik";
 import { testConvert } from "./utils/testConvert";
 
 describe("form", async () => {
@@ -25,7 +31,7 @@ describe("form", async () => {
       name: "conform",
       Component: ConformSampleForm,
     },
-  ])("render $name", ({ Component }) => {
+  ])("render SampleForm: $name", ({ Component }) => {
     render(<Component />);
 
     expect(
@@ -48,5 +54,24 @@ describe("form", async () => {
         name: "Custom Input",
       }).value,
     ).toBe("123");
+  });
+
+  test.each<{ name: string; Component: () => ReactNode }>([
+    {
+      name: "formik",
+      Component: ConformSampleFormWithFormComponent,
+    },
+    {
+      name: "conform",
+      Component: FormikSampleFormWithFormComponent,
+    },
+  ])("render SampleFormWithFormComponent : $name", ({ Component }) => {
+    render(<Component />);
+
+    expect(
+      screen.getByRole<HTMLInputElement>("textbox", {
+        name: "Name",
+      }).value,
+    ).toBe("");
   });
 });
