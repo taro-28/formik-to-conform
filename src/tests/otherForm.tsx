@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 
 export const OtherForm = () => {
   const [name, setName] = useState("");
