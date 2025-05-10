@@ -20,6 +20,9 @@ export const SampleForm = () => {
       }}
       validationSchema={yup.object({
         rawInput: yup.string().required("Raw Input is required"),
+        customInput: yup
+          .number()
+          .min(100, "Custom Input must be greater than 100"),
       })}
     >
       {(props) => (

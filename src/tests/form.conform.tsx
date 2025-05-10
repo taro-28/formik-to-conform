@@ -19,6 +19,9 @@ export const SampleForm = () => {
       return parseWithYup(formData, {
         schema: yup.object({
           rawInput: yup.string().required("Raw Input is required"),
+          customInput: yup
+            .number()
+            .min(100, "Custom Input must be greater than 100"),
         }),
       });
     },
