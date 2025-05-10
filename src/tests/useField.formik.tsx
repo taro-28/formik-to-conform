@@ -11,3 +11,21 @@ export const SampleUseField1 = () => {
     </div>
   );
 };
+
+type FieldValue = {
+  name: string;
+  age: number;
+};
+
+export const SampleUseField2 = () => {
+  const [{ value }, , { setValue }] = useField<FieldValue>("user");
+
+  return (
+    <div>
+      User: {JSON.stringify(value)}
+      <button type="button" onClick={() => setValue({ name: "", age: 20 })}>
+        Reset
+      </button>
+    </div>
+  );
+};

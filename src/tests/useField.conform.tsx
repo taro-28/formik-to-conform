@@ -16,3 +16,24 @@ export const SampleUseField1 = () => {
     </div>
   );
 };
+
+type FieldValue = {
+  name: string;
+  age: number;
+};
+
+export const SampleUseField2 = () => {
+  const [field, form] = useField<FieldValue>("user");
+  const value = field.value;
+  const setValue = (value: FieldValue, shouldValidate?: boolean) =>
+    form.update({ name: "user", value, validated: !!shouldValidate });
+
+  return (
+    <div>
+      User: {JSON.stringify(value)}
+      <button type="button" onClick={() => setValue({ name: "", age: 20 })}>
+        Reset
+      </button>
+    </div>
+  );
+};
