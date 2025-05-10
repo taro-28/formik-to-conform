@@ -407,6 +407,15 @@ function updateOnSubmitAttr(j: JSCodeshift, formJSX: JSXElement) {
  * @returns 変換後コード
  */
 export async function convert(code: string): Promise<string> {
+  // Check if the code uses Formik
+  const hasFormikImport = code.includes('from "formik"');
+  const hasFormikJSX = code.includes("<Formik") || code.includes("<Form");
+
+  // If code doesn't use Formik at all, return it unchanged
+  if (!hasFormikImport && !hasFormikJSX) {
+    return code;
+  }
+
   // TSX 用パーサで jscodeshift API を取得
   const j: JSCodeshift = jscodeshift.withParser("tsx");
   const root = j(code);
