@@ -787,84 +787,84 @@ export async function convert(code: string): Promise<string> {
           const funcNode = funcPath.get(0).node;
 
           // JSX内のinputを見つける
-          j(funcNode)
-            .find(j.JSXElement, {
-              openingElement: {
-                name: { name: "input" },
-              },
-            })
-            .forEach((inputPath) => {
-              const attrs = inputPath.node.openingElement.attributes || [];
-              const spreadAttr = attrs.find(
-                (attr) =>
-                  attr.type === "JSXSpreadAttribute" &&
-                  attr.argument.type === "CallExpression" &&
-                  attr.argument.callee.type === "Identifier" &&
-                  attr.argument.callee.name === "getFieldProps",
-              );
+          const inputElements = j(funcNode).find(j.JSXElement, {
+            openingElement: {
+              name: { name: "input" },
+            },
+          });
 
-              if (spreadAttr && spreadAttr.type === "JSXSpreadAttribute") {
-                const callNode = spreadAttr.argument;
-                if (
-                  callNode.type === "CallExpression" &&
-                  callNode.arguments.length > 0
-                ) {
-                  const fieldArg = callNode.arguments[0];
-                  if (fieldArg && fieldArg.type === "StringLiteral") {
-                    const fieldName = fieldArg.value;
+          for (const inputPath of inputElements.paths()) {
+            const attrs = inputPath.node.openingElement.attributes || [];
+            const spreadAttr = attrs.find(
+              (attr) =>
+                attr.type === "JSXSpreadAttribute" &&
+                attr.argument.type === "CallExpression" &&
+                attr.argument.callee.type === "Identifier" &&
+                attr.argument.callee.name === "getFieldProps",
+            );
 
-                    // typeプロパティを探す
-                    let typeValue = "text"; // デフォルト値
-                    const typeAttr = attrs.find(
-                      (attr) =>
-                        attr.type === "JSXAttribute" &&
-                        attr.name &&
-                        attr.name.name === "type",
-                    );
+            if (spreadAttr && spreadAttr.type === "JSXSpreadAttribute") {
+              const callNode = spreadAttr.argument;
+              if (
+                callNode.type === "CallExpression" &&
+                callNode.arguments.length > 0
+              ) {
+                const fieldArg = callNode.arguments[0];
+                if (fieldArg && fieldArg.type === "StringLiteral") {
+                  const fieldName = fieldArg.value;
 
-                    if (
-                      typeAttr &&
-                      typeAttr.type === "JSXAttribute" &&
-                      typeAttr.value
-                    ) {
-                      if (typeAttr.value.type === "StringLiteral") {
-                        typeValue = typeAttr.value.value;
-                      }
+                  // typeプロパティを探す
+                  let typeValue = "text"; // デフォルト値
+                  const typeAttr = attrs.find(
+                    (attr) =>
+                      attr.type === "JSXAttribute" &&
+                      attr.name &&
+                      attr.name.name === "type",
+                  );
+
+                  if (
+                    typeAttr &&
+                    typeAttr.type === "JSXAttribute" &&
+                    typeAttr.value
+                  ) {
+                    if (typeAttr.value.type === "StringLiteral") {
+                      typeValue = typeAttr.value.value;
                     }
-
-                    // 新しいinput要素を作成
-                    const newElement = j.jsxElement(
-                      j.jsxOpeningElement(
-                        j.jsxIdentifier("input"),
-                        [
-                          j.jsxSpreadAttribute(
-                            j.callExpression(j.identifier("getInputProps"), [
-                              j.memberExpression(
-                                j.identifier("fields"),
-                                j.identifier(fieldName),
-                              ),
-                              j.objectExpression([
-                                j.property(
-                                  "init",
-                                  j.identifier("type"),
-                                  j.literal(typeValue),
-                                ),
-                              ]),
-                            ]),
-                          ),
-                        ],
-                        true,
-                      ),
-                      null,
-                      [],
-                    );
-
-                    // 要素を置き換え
-                    inputPath.replace(newElement);
                   }
+
+                  // 新しいinput要素を作成
+                  const newElement = j.jsxElement(
+                    j.jsxOpeningElement(
+                      j.jsxIdentifier("input"),
+                      [
+                        j.jsxSpreadAttribute(
+                          j.callExpression(j.identifier("getInputProps"), [
+                            j.memberExpression(
+                              j.identifier("fields"),
+                              j.identifier(fieldName),
+                            ),
+                            j.objectExpression([
+                              j.property(
+                                "init",
+                                j.identifier("type"),
+                                j.literal(typeValue),
+                              ),
+                            ]),
+                          ]),
+                        ),
+                      ],
+                      true,
+                    ),
+                    null,
+                    [],
+                  );
+
+                  // 要素を置き換え
+                  inputPath.replace(newElement);
                 }
               }
-            });
+            }
+          }
         }
       }
     }
