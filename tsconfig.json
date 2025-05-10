@@ -2,9 +2,9 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "esnext"],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "target": "ESNext",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "target": "ES2020",
     "strict": true,
     "allowUnusedLabels": false,
     "allowUnreachableCode": false,
@@ -22,10 +22,12 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "noEmit": true,
+    "noEmit": false,
+    "outDir": "./dist",
+    "declaration": true,
     "useDefineForClassFields": true,
     "jsx": "preserve",
-    "types": ["@testing-library/jest-dom"]
+    "types": ["@testing-library/jest-dom", "node"]
   },
   "include": ["src/**/*"]
 }
