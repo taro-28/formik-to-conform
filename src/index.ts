@@ -331,6 +331,35 @@ function transformUseFieldInputs(
           const spreadIndex = newAttrs.indexOf(spreadAttr);
           newAttrs.splice(spreadIndex, 1, getInputPropsSpread);
           el.attributes = newAttrs;
+        } else if (
+          spreadAttr.type === "JSXSpreadAttribute" &&
+          spreadAttr.argument.type === "CallExpression" &&
+          spreadAttr.argument.callee.type === "Identifier" &&
+          spreadAttr.argument.callee.name === "getFieldProps"
+        ) {
+          // Create the getInputProps expression
+          const fieldName = spreadAttr.argument.arguments[0];
+          if (fieldName) {
+            const getInputPropsSpread = j.jsxSpreadAttribute(
+              j.callExpression(j.identifier("getInputProps"), [
+                j.memberExpression(
+                  j.identifier("fields"),
+                  j.identifier(
+                    fieldName.type === "StringLiteral"
+                      ? fieldName.value
+                      : "field",
+                  ),
+                ),
+                j.objectExpression([]),
+              ]),
+            );
+
+            // Replace {...getFieldProps("name")} with {...getInputProps(fields.name)}
+            const newAttrs = [...(el.attributes || [])];
+            const spreadIndex = newAttrs.indexOf(spreadAttr);
+            newAttrs.splice(spreadIndex, 1, getInputPropsSpread);
+            el.attributes = newAttrs;
+          }
         }
       }
     }
@@ -599,6 +628,7 @@ export async function convert(code: string): Promise<string> {
             "isSubmitting",
             "update",
             "values",
+            "getFieldProps",
           ].filter(
             (name) => j(funcNode).find(j.Identifier, { name }).size() > 0,
           );
@@ -616,6 +646,9 @@ export async function convert(code: string): Promise<string> {
         const usesIsSubmitting =
           propNames.includes("isSubmitting") ||
           referencedNames.includes("isSubmitting");
+        const usesGetFieldProps =
+          propNames.includes("getFieldProps") ||
+          referencedNames.includes("getFieldProps");
 
         const onlySetFieldValue =
           (propNames.length === 1 && propNames[0] === "setFieldValue") ||
@@ -675,6 +708,24 @@ export async function convert(code: string): Promise<string> {
           }
         }
 
+        // getFieldProps が使われている場合、fieldsを追加
+        if (usesGetFieldProps) {
+          insertDecls.push(
+            j.variableDeclaration("const", [
+              j.variableDeclarator(
+                j.identifier("fields"),
+                j.callExpression(
+                  j.memberExpression(
+                    j.identifier("form"),
+                    j.identifier("getFieldset"),
+                  ),
+                  [],
+                ),
+              ),
+            ]),
+          );
+        }
+
         // setFieldTouched が参照されている場合
         if (usesSetFieldTouched) {
           const node = recast.parse(
@@ -730,6 +781,91 @@ export async function convert(code: string): Promise<string> {
         if (formIdx !== -1 && insertDecls.length > 0) {
           parentBody.splice(formIdx + 1, 0, ...insertDecls);
         }
+
+        // Find and transform all getFieldProps calls to getInputProps
+        if (usesGetFieldProps && funcPath.size() > 0) {
+          const funcNode = funcPath.get(0).node;
+
+          // JSX内のinputを見つける
+          j(funcNode)
+            .find(j.JSXElement, {
+              openingElement: {
+                name: { name: "input" },
+              },
+            })
+            .forEach((inputPath) => {
+              const attrs = inputPath.node.openingElement.attributes || [];
+              const spreadAttr = attrs.find(
+                (attr) =>
+                  attr.type === "JSXSpreadAttribute" &&
+                  attr.argument.type === "CallExpression" &&
+                  attr.argument.callee.type === "Identifier" &&
+                  attr.argument.callee.name === "getFieldProps",
+              );
+
+              if (spreadAttr && spreadAttr.type === "JSXSpreadAttribute") {
+                const callNode = spreadAttr.argument;
+                if (
+                  callNode.type === "CallExpression" &&
+                  callNode.arguments.length > 0
+                ) {
+                  const fieldArg = callNode.arguments[0];
+                  if (fieldArg && fieldArg.type === "StringLiteral") {
+                    const fieldName = fieldArg.value;
+
+                    // typeプロパティを探す
+                    let typeValue = "text"; // デフォルト値
+                    const typeAttr = attrs.find(
+                      (attr) =>
+                        attr.type === "JSXAttribute" &&
+                        attr.name &&
+                        attr.name.name === "type",
+                    );
+
+                    if (
+                      typeAttr &&
+                      typeAttr.type === "JSXAttribute" &&
+                      typeAttr.value
+                    ) {
+                      if (typeAttr.value.type === "StringLiteral") {
+                        typeValue = typeAttr.value.value;
+                      }
+                    }
+
+                    // 新しいinput要素を作成
+                    const newElement = j.jsxElement(
+                      j.jsxOpeningElement(
+                        j.jsxIdentifier("input"),
+                        [
+                          j.jsxSpreadAttribute(
+                            j.callExpression(j.identifier("getInputProps"), [
+                              j.memberExpression(
+                                j.identifier("fields"),
+                                j.identifier(fieldName),
+                              ),
+                              j.objectExpression([
+                                j.property(
+                                  "init",
+                                  j.identifier("type"),
+                                  j.literal(typeValue),
+                                ),
+                              ]),
+                            ]),
+                          ),
+                        ],
+                        true,
+                      ),
+                      null,
+                      [],
+                    );
+
+                    // 要素を置き換え
+                    inputPath.replace(newElement);
+                  }
+                }
+              }
+            });
+        }
       }
     }
   }
@@ -746,6 +882,7 @@ export async function convert(code: string): Promise<string> {
 
   // Add appropriate imports based on what's being used
   if (hasUseFormikContext) {
+    specifiers.push(j.importSpecifier(j.identifier("getInputProps")));
     specifiers.push(j.importSpecifier(j.identifier("useFormMetadata")));
   } else {
     // Only add getInputProps if not using useFormikContext

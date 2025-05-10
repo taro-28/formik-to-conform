@@ -5,8 +5,13 @@ type FormValues = {
 };
 
 export const SampleUseFormikContext1 = () => {
-  const { values, setFieldValue, setFieldTouched, isSubmitting } =
-    useFormikContext<FormValues>();
+  const {
+    values,
+    setFieldValue,
+    setFieldTouched,
+    isSubmitting,
+    getFieldProps,
+  } = useFormikContext<FormValues>();
   const handleClick = async () => {
     await setFieldValue("name", "John");
     await setFieldTouched("name", true);
@@ -18,6 +23,7 @@ export const SampleUseFormikContext1 = () => {
       <button type="button" disabled={isSubmitting} onClick={handleClick}>
         Set Name
       </button>
+      <input {...getFieldProps("name")} type="text" />
     </div>
   );
 };

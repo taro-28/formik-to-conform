@@ -1,4 +1,4 @@
-import { useFormMetadata } from "@conform-to/react";
+import { getInputProps, useFormMetadata } from "@conform-to/react";
 
 type FormValues = {
   name: string;
@@ -15,6 +15,7 @@ export const SampleUseFormikContext1 = () => {
   ) => {
     update({ name, value, validated: !!shouldValidate });
   };
+  const fields = form.getFieldset();
   // cannot convert to conform
   const setFieldTouched = (_: string, __: boolean) => {};
   const isSubmitting = false;
@@ -29,6 +30,11 @@ export const SampleUseFormikContext1 = () => {
       <button type="button" disabled={isSubmitting} onClick={handleClick}>
         Set Name
       </button>
+      <input
+        {...getInputProps(fields.name, {
+          type: "text",
+        })}
+      />
     </div>
   );
 };
