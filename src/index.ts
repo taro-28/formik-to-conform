@@ -412,8 +412,7 @@ function transformUseFieldDestructurePatterns(
         if (idx !== -1) {
           // return文の直前を探す
           const returnIdx = parentBody.findIndex(
-            (stmt: unknown) =>
-              (stmt as { type?: string }).type === "ReturnStatement",
+            (stmt: { type?: string }) => stmt.type === "ReturnStatement",
           );
           // const value = field.value;
           const valueDecl = j.variableDeclaration("const", [
@@ -582,107 +581,49 @@ export async function convert(code: string): Promise<string> {
     });
 
     for (const path of useFormMetadataVars.paths()) {
-      // Check if there's values in the destructuring
-      if (path.node.id.type === "ObjectPattern") {
-        // もともと分割代入していた各プロパティ名をform.xxx参照に置換
-        const origProps = path.node.id.properties
-          .filter(
-            (p: unknown) =>
-              (p as { type: string }).type === "ObjectProperty" &&
-              (p as { key: { type: string } }).key.type === "Identifier",
-          )
-          .map((p: unknown) => (p as { key: { name: string } }).key.name);
-        // 変数名をformに置換し、分割代入行自体もform単体の宣言に置換
-        path.node.id = j.identifier("form");
-        path.parent.node.declarations = [
-          j.variableDeclarator(j.identifier("form"), path.node.init),
-        ];
-        // form宣言の直後に個別変数宣言を挿入
-        const insertDecls = [];
-        // 固定順で個別変数宣言を生成
-        const declOrder = [
-          "values",
-          // updateはsetFieldValueがある場合も必ず出力
-          ...(origProps.includes("setFieldValue") &&
-          !origProps.includes("update")
-            ? ["update"]
-            : []),
-          "update",
-          "setFieldValue",
-          "setFieldTouched",
-          "isSubmitting",
-        ];
-        const alreadyAdded = new Set<string>();
-        for (const prop of declOrder) {
-          if (
-            (origProps.includes(prop) ||
-              (prop === "update" && origProps.includes("setFieldValue"))) &&
-            !alreadyAdded.has(prop)
-          ) {
-            alreadyAdded.add(prop);
-            if (prop === "values") {
-              insertDecls.push(
-                j.variableDeclaration("const", [
-                  j.variableDeclarator(
-                    j.identifier("values"),
-                    j.memberExpression(
-                      j.identifier("form"),
-                      j.identifier("value"),
-                    ),
-                  ),
-                ]),
-              );
-            } else if (prop === "update") {
-              insertDecls.push(
-                j.variableDeclaration("const", [
-                  j.variableDeclarator(
-                    j.identifier("update"),
-                    j.memberExpression(
-                      j.identifier("form"),
-                      j.identifier("update"),
-                    ),
-                  ),
-                ]),
-              );
-            } else if (prop === "setFieldValue") {
-              const setFieldValueAst = recast.parse(
-                "const setFieldValue = (name: string, value: any, shouldValidate?: boolean) => { update({ name, value, validated: !!shouldValidate }); };",
-                { parser: recastTS },
-              ).program.body[0];
-              insertDecls.push(setFieldValueAst);
-            } else if (prop === "setFieldTouched") {
-              const setFieldTouchedAst = recast.parse(
-                "const setFieldTouched = (_: string, __: boolean) => {};",
-                { parser: recastTS },
-              ).program.body[0];
-              setFieldTouchedAst.comments = [
-                { type: "CommentLine", value: " cannot convert to conform" },
-              ];
-              insertDecls.push(setFieldTouchedAst);
-            } else if (prop === "isSubmitting") {
-              insertDecls.push(
-                j.variableDeclaration("const", [
-                  j.variableDeclarator(
-                    j.identifier("isSubmitting"),
-                    j.literal(false),
-                  ),
-                ]),
-              );
-            }
-          }
-        }
-        // form宣言の直後に挿入 → return文の直前にまとめて挿入
-        const parentBody = j(path)
-          .closest(j.Function, () => true)
-          .get(0).node.body.body;
-        const returnIdx = parentBody.findIndex(
-          (stmt: unknown) =>
-            (stmt as { type?: string }).type === "ReturnStatement",
-        );
-        if (returnIdx !== -1 && insertDecls.length > 0) {
-          parentBody.splice(returnIdx, 0, ...insertDecls);
-        }
-        // 参照置換は行わない（form.value等はそのまま残す）
+      path.node.id = j.identifier("form");
+      path.parent.node.declarations = [
+        j.variableDeclarator(j.identifier("form"), path.node.init),
+      ];
+      const insertDecls = [
+        j.variableDeclaration("const", [
+          j.variableDeclarator(
+            j.identifier("values"),
+            j.memberExpression(j.identifier("form"), j.identifier("value")),
+          ),
+        ]),
+        j.variableDeclaration("const", [
+          j.variableDeclarator(
+            j.identifier("update"),
+            j.memberExpression(j.identifier("form"), j.identifier("update")),
+          ),
+        ]),
+        recast.parse(
+          "const setFieldValue = (name: string, value: any, shouldValidate?: boolean) => { update({ name, value, validated: !!shouldValidate }); };",
+          { parser: recastTS },
+        ).program.body[0],
+        (() => {
+          const node = recast.parse(
+            "const setFieldTouched = (_: string, __: boolean) => {};",
+            { parser: recastTS },
+          ).program.body[0];
+          node.comments = [
+            { type: "CommentLine", value: " cannot convert to conform" },
+          ];
+          return node;
+        })(),
+        j.variableDeclaration("const", [
+          j.variableDeclarator(j.identifier("isSubmitting"), j.literal(false)),
+        ]),
+      ];
+      const parentBody = j(path)
+        .closest(j.Function, () => true)
+        .get(0).node.body.body;
+      const returnIdx = parentBody.findIndex(
+        (stmt: { type?: string }) => stmt.type === "ReturnStatement",
+      );
+      if (returnIdx !== -1) {
+        parentBody.splice(returnIdx, 0, ...insertDecls);
       }
     }
   }
