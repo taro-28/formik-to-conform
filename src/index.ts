@@ -157,7 +157,6 @@ function transformToGetInputProps(
           attr.type === "JSXAttribute" &&
           (attr.name?.name === "onChange" ||
             attr.name?.name === "onBlur" ||
-            attr.name?.name === "onClick" ||
             attr.name?.name === "value")
         ),
     );
@@ -411,6 +410,11 @@ function transformUseFieldDestructurePatterns(
       if (Array.isArray(parentBody)) {
         const idx = parentBody.indexOf(path.parent.node);
         if (idx !== -1) {
+          // return文の直前を探す
+          const returnIdx = parentBody.findIndex(
+            (stmt: unknown) =>
+              (stmt as { type?: string }).type === "ReturnStatement",
+          );
           // const value = field.value;
           const valueDecl = j.variableDeclaration("const", [
             j.variableDeclarator(
@@ -428,7 +432,11 @@ function transformUseFieldDestructurePatterns(
             node.init.arguments[0] !== undefined &&
             node.init.arguments[0].type !== "SpreadElement"
           ) {
-            nameArg = node.init.arguments[0];
+            if (node.init.arguments[0].type === "StringLiteral") {
+              nameArg = node.init.arguments[0];
+            } else {
+              nameArg = j.literal("user");
+            }
           } else {
             nameArg = j.literal("user");
           }
@@ -489,7 +497,22 @@ function transformUseFieldDestructurePatterns(
               ),
             ),
           ]);
-          parentBody.splice(idx + 1, 0, valueDecl, setValueDecl);
+          // return文の直前に挿入
+          if (returnIdx !== -1) {
+            parentBody.splice(returnIdx, 0, valueDecl, setValueDecl);
+          } else {
+            parentBody.splice(idx + 1, 0, valueDecl, setValueDecl);
+          }
+          // return文がJSX式のみの場合はreturn文を除去し、JSX式だけを残す
+          if (
+            returnIdx !== -1 &&
+            parentBody[returnIdx].type === "ReturnStatement" &&
+            parentBody[returnIdx].argument &&
+            (parentBody[returnIdx].argument.type === "JSXElement" ||
+              parentBody[returnIdx].argument.type === "JSXFragment")
+          ) {
+            parentBody[returnIdx] = parentBody[returnIdx].argument;
+          }
         }
       }
     }
@@ -561,109 +584,167 @@ export async function convert(code: string): Promise<string> {
     for (const path of useFormMetadataVars.paths()) {
       // Check if there's values in the destructuring
       if (path.node.id.type === "ObjectPattern") {
-        const properties = path.node.id.properties;
-        let hasSetFieldValue = false;
-        let hasUpdate = false;
-        let hasSetFieldTouched = false;
-        let hasIsSubmitting = false;
-        for (let i = 0; i < properties.length; i++) {
-          const prop = properties[i];
-          if (
-            prop &&
-            prop.type === "ObjectProperty" &&
-            // @ts-ignore: Type checking for property access
-            prop.key.type === "Identifier"
-          ) {
-            // values → value: values
-            if (prop.key.name === "values") {
-              const newProp = j.property(
-                "init",
-                j.identifier("value"),
-                j.identifier("values"),
+        // 変数名をformに置換
+        path.node.id = j.identifier("form");
+        // もともと分割代入していた各プロパティ名をform.xxx参照に置換
+        const origProps =
+          path.parent.node.declarations[0].id.type === "ObjectPattern"
+            ? path.parent.node.declarations[0].id.properties
+                .filter(
+                  (p: unknown) =>
+                    (p as { type: string }).type === "ObjectProperty" &&
+                    (p as { key: { type: string } }).key.type === "Identifier",
+                )
+                .map((p: unknown) => (p as { key: { name: string } }).key.name)
+            : [];
+        // form宣言の直後に個別変数宣言を挿入
+        const insertDecls = [];
+        // 固定順で個別変数宣言を生成
+        const declOrder = [
+          "values",
+          "update",
+          "setFieldValue",
+          "setFieldTouched",
+          "isSubmitting",
+        ];
+        for (const prop of declOrder) {
+          if (origProps.includes(prop)) {
+            if (prop === "values") {
+              insertDecls.push(
+                j.variableDeclaration("const", [
+                  j.variableDeclarator(
+                    j.identifier("values"),
+                    j.memberExpression(
+                      j.identifier("form"),
+                      j.identifier("value"),
+                    ),
+                  ),
+                ]),
               );
-              newProp.shorthand = false;
-              properties[i] = newProp;
-            }
-            // setFieldValue → remove from destructure, but remember to add update
-            if (prop.key.name === "setFieldValue") {
-              hasSetFieldValue = true;
-              properties.splice(i, 1);
-              i--;
-            }
-            // setFieldTouched → remove from destructure
-            if (prop.key.name === "setFieldTouched") {
-              hasSetFieldTouched = true;
-              properties.splice(i, 1);
-              i--;
-            }
-            // isSubmitting → remove from destructure
-            if (prop.key.name === "isSubmitting") {
-              hasIsSubmitting = true;
-              properties.splice(i, 1);
-              i--;
-            }
-            // update → already present
-            if (prop.key.name === "update") {
-              hasUpdate = true;
-            }
-          }
-        }
-        // setFieldValueがあった場合はupdateを必ず追加
-        if (hasSetFieldValue && !hasUpdate) {
-          const updateProp = j.property(
-            "init",
-            j.identifier("update"),
-            j.identifier("update"),
-          );
-          updateProp.shorthand = true;
-          properties.push(updateProp);
-        }
-        // If setFieldValue was present, insert setFieldValue function after the variable declaration
-        // Also insert setFieldTouched and isSubmitting if they were present
-        if (hasSetFieldValue || hasSetFieldTouched || hasIsSubmitting) {
-          // Find the parent statement (VariableDeclaration)
-          const parent = path.parent;
-          if (parent?.node && parent.node.type === "VariableDeclaration") {
-            // Insert after this declaration
-            const extraNodes = [];
-            if (hasSetFieldValue) {
-              const setFieldValueCode =
-                "const setFieldValue = (name: string, value: any, shouldValidate?: boolean) => { update({ name, value, validated: !!shouldValidate }); };";
-              const setFieldValueAst = recast.parse(setFieldValueCode, {
-                parser: recastTS,
-              }).program.body[0];
-              extraNodes.push(setFieldValueAst);
-            }
-            if (hasSetFieldTouched) {
-              const setFieldTouchedCode =
-                "const setFieldTouched = (_: string, __: boolean) => {};";
-              const setFieldTouchedAst = recast.parse(setFieldTouchedCode, {
-                parser: recastTS,
-              }).program.body[0];
-              // コメントノードを追加
+            } else if (prop === "update") {
+              insertDecls.push(
+                j.variableDeclaration("const", [
+                  j.variableDeclarator(
+                    j.identifier("update"),
+                    j.memberExpression(
+                      j.identifier("form"),
+                      j.identifier("update"),
+                    ),
+                  ),
+                ]),
+              );
+            } else if (prop === "setFieldValue") {
+              const setFieldValueAst = recast.parse(
+                "const setFieldValue = (name: string, value: any, shouldValidate?: boolean) => { update({ name, value, validated: !!shouldValidate }); };",
+                { parser: recastTS },
+              ).program.body[0];
+              insertDecls.push(setFieldValueAst);
+            } else if (prop === "setFieldTouched") {
+              const setFieldTouchedAst = recast.parse(
+                "const setFieldTouched = (_: string, __: boolean) => {};",
+                { parser: recastTS },
+              ).program.body[0];
               setFieldTouchedAst.comments = [
                 { type: "CommentLine", value: " cannot convert to conform" },
               ];
-              extraNodes.push(setFieldTouchedAst);
+              insertDecls.push(setFieldTouchedAst);
+            } else if (prop === "isSubmitting") {
+              insertDecls.push(
+                j.variableDeclaration("const", [
+                  j.variableDeclarator(
+                    j.identifier("isSubmitting"),
+                    j.literal(false),
+                  ),
+                ]),
+              );
             }
-            if (hasIsSubmitting) {
-              const isSubmittingCode = "const isSubmitting = false;";
-              const isSubmittingAst = recast.parse(isSubmittingCode, {
-                parser: recastTS,
-              }).program.body[0];
-              extraNodes.push(isSubmittingAst);
+          }
+        }
+        // form宣言の直後に挿入 → return文の直前にまとめて挿入
+        const parentBody = j(path)
+          .closest(j.Function, () => true)
+          .get(0).node.body.body;
+        const returnIdx = parentBody.findIndex(
+          (stmt: unknown) =>
+            (stmt as { type?: string }).type === "ReturnStatement",
+        );
+        if (returnIdx !== -1 && insertDecls.length > 0) {
+          parentBody.splice(returnIdx, 0, ...insertDecls);
+        }
+        // 参照置換
+        const replaceMap: Record<string, string> = {
+          values: "value",
+          update: "update",
+          setFieldValue: "setFieldValue",
+          setFieldTouched: "setFieldTouched",
+          isSubmitting: "isSubmitting",
+        };
+        const reverseMap: Record<string, string> = {
+          value: "values",
+          update: "update",
+          setFieldValue: "setFieldValue",
+          setFieldTouched: "setFieldTouched",
+          isSubmitting: "isSubmitting",
+        };
+        // form.value → values などの置換
+        for (const memberPath of j(path).find(j.MemberExpression).paths()) {
+          const propName =
+            memberPath.node.property.type === "Identifier"
+              ? memberPath.node.property.name
+              : undefined;
+          if (
+            memberPath.node.object.type === "Identifier" &&
+            memberPath.node.object.name === "form" &&
+            propName &&
+            typeof reverseMap[propName] === "string"
+          ) {
+            memberPath.replace(j.identifier(reverseMap[propName]));
+          }
+        }
+        for (const idPath of j(path).find(j.Identifier).paths()) {
+          const name = idPath.node.name;
+          if (replaceMap[name]) {
+            // 直上がPropertyのkeyならスキップ
+            if (
+              idPath.parent.node.type === "Property" &&
+              idPath.parent.node.key === idPath.node
+            ) {
+              continue;
             }
-            const body =
-              parent.parent?.node &&
-              parent.parent.node.type === "BlockStatement"
-                ? parent.parent.node.body
-                : null;
-            if (body) {
-              const idx = body.indexOf(parent.node);
-              if (idx !== -1) {
-                body.splice(idx + 1, 0, ...extraNodes);
-              }
+            // すでにform.参照ならスキップ
+            if (
+              idPath.parent.node.type === "MemberExpression" &&
+              idPath.parent.node.object.type === "Identifier" &&
+              idPath.parent.node.object.name === "form"
+            ) {
+              continue;
             }
+            // すでに個別変数参照ならスキップ（values, update, ...）
+            if (
+              parentBody.some(
+                (stmt: unknown) =>
+                  (stmt as { type?: string; declarations?: unknown[] }).type ===
+                    "VariableDeclaration" &&
+                  (
+                    (stmt as { declarations?: unknown[] }).declarations || []
+                  ).some(
+                    (d: unknown) =>
+                      (d as { id?: { type?: string; name?: string } }).id
+                        ?.type === "Identifier" &&
+                      (d as { id?: { type?: string; name?: string } }).id
+                        ?.name === name,
+                  ),
+              )
+            ) {
+              continue;
+            }
+            // 置換
+            idPath.replace(
+              j.memberExpression(
+                j.identifier("form"),
+                j.identifier(replaceMap[name]),
+              ),
+            );
           }
         }
       }
