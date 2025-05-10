@@ -119,6 +119,16 @@ function transformToGetInputProps(
 
   for (const elemPath of elements.paths()) {
     const el = elemPath.node.openingElement;
+    // Remove onChange, onBlur, and value attributes
+    el.attributes = (el.attributes || []).filter(
+      (attr) =>
+        !(
+          attr.type === "JSXAttribute" &&
+          (attr.name?.name === "onChange" ||
+            attr.name?.name === "onBlur" ||
+            attr.name?.name === "value")
+        ),
+    );
     const idAttr = findAttribute(el.attributes, "id");
     const nameAttr = isField ? findAttribute(el.attributes, "name") : null;
 
@@ -468,28 +478,84 @@ export async function convert(code: string): Promise<string> {
       // Check if there's values in the destructuring
       if (path.node.id.type === "ObjectPattern") {
         const properties = path.node.id.properties;
-
-        // Transform values to value: values
+        let hasValues = false;
+        let hasSetFieldValue = false;
+        let needsUpdate = false;
         for (let i = 0; i < properties.length; i++) {
           const prop = properties[i];
           if (
             prop &&
             prop.type === "ObjectProperty" &&
             // @ts-ignore: Type checking for property access
-            prop.key.type === "Identifier" &&
-            // @ts-ignore: Type checking for property access
-            prop.key.name === "values"
+            prop.key.type === "Identifier"
           ) {
-            // Create a new property for { value: values }
-            const newProp = j.property(
-              "init",
-              j.identifier("value"),
-              j.identifier("values"),
-            );
-            // @ts-ignore: Property assignment
-            newProp.shorthand = false;
-            // Replace the existing property
-            properties[i] = newProp;
+            // values → value: values
+            if (prop.key.name === "values") {
+              hasValues = true;
+              const newProp = j.property(
+                "init",
+                j.identifier("value"),
+                j.identifier("values"),
+              );
+              newProp.shorthand = false;
+              properties[i] = newProp;
+            }
+            // setFieldValue → remove from destructure, but remember to add update
+            if (prop.key.name === "setFieldValue") {
+              hasSetFieldValue = true;
+              needsUpdate = true;
+              properties.splice(i, 1);
+              i--;
+            }
+          }
+        }
+        // If setFieldValue was present, add update to the destructure if not already present
+        if (
+          hasSetFieldValue &&
+          !properties.some(
+            (p) =>
+              p.type === "ObjectProperty" &&
+              p.key.type === "Identifier" &&
+              p.key.name === "update",
+          )
+        ) {
+          // Use shorthand property for update
+          const updateProp = j.property(
+            "init",
+            j.identifier("update"),
+            j.identifier("update"),
+          );
+          if (
+            updateProp.type === "Property" ||
+            updateProp.type === "ObjectProperty"
+          ) {
+            updateProp.shorthand = true;
+          }
+          properties.push(updateProp);
+        }
+        // If setFieldValue was present, insert setFieldValue function after the variable declaration
+        if (hasSetFieldValue) {
+          // Find the parent statement (VariableDeclaration)
+          const parent = path.parent;
+          if (parent?.node && parent.node.type === "VariableDeclaration") {
+            // Insert after this declaration
+            const setFieldValueCode =
+              "\nconst setFieldValue = (name: string, value: any, shouldValidate?: boolean) => {\n  update({ name, value, validated: !!shouldValidate });\n};\n";
+            const recastParse = require("recast").parse;
+            const setFieldValueAst = recastParse(setFieldValueCode, {
+              parser: require("recast/parsers/typescript"),
+            }).program.body[0];
+            const body =
+              parent.parent?.node &&
+              parent.parent.node.type === "BlockStatement"
+                ? parent.parent.node.body
+                : null;
+            if (body) {
+              const idx = body.indexOf(parent.node);
+              if (idx !== -1) {
+                body.splice(idx + 1, 0, setFieldValueAst);
+              }
+            }
           }
         }
       }
@@ -741,8 +807,17 @@ export async function convert(code: string): Promise<string> {
           /import \* as yup from "yup";\n\n/g,
           'import * as yup from "yup";\n',
         )
+        // Remove extra blank lines between useFormMetadata destructure and setFieldValue
+        .replace(
+          /(const \{[^}]+\} = useFormMetadata<[^>]+>\([^)]*\);?)\n{2,}/g,
+          "$1\n",
+        )
     );
   }
 
-  return output;
+  // Remove extra blank lines between useFormMetadata destructure and setFieldValue
+  return output.replace(
+    /(const \{[^}]+\} = useFormMetadata<[^>]+>\([^)]*\);?)\n{2,}/g,
+    "$1\n",
+  );
 }
