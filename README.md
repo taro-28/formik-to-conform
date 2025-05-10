@@ -50,4 +50,5 @@ pnpm cli src
   - 💤 `FieldHelperProps`
 - 🏃 `useFormikContext` hook
   - 🙌 `values`
+  - 🙌 `setFieldValue`
 - 💤 `useFormik` hook
