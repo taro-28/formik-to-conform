@@ -419,11 +419,10 @@ function updateOnSubmitAttr(j: JSCodeshift, formJSX: JSXElement) {
 export async function convert(code: string): Promise<string> {
   // Check if the code uses Formik
   const hasFormikImport = code.includes('from "formik"');
-  const hasFormikJSX = code.includes("<Formik") || code.includes("<Form");
   const hasUseFormikContext = code.includes("useFormikContext");
 
   // If code doesn't use Formik at all, return it unchanged
-  if (!hasFormikImport && !hasFormikJSX && !hasUseFormikContext) {
+  if (!hasFormikImport && !hasUseFormikContext) {
     return code;
   }
 
