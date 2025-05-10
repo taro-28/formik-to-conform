@@ -33,24 +33,27 @@ pnpm cli src
 
 # Progress
 
-- 🙌 implemented
+- ✅ implemented
 - 🏃 implementing
-- 💤 not implemented
+- ❌ not implemented
 
 ---
 
-- 🏃 `Formik` Component
-  - 🙌 `initialValues`
-  - 🙌 `onSubmit`
-  - 🙌 `validationSchema`
-- 🙌 `Field` Component
-- 🙌 `Form` Component
-- 🏃 `useField` hook
-  - 🙌 Generics
-  - 🙌 `FieldInputProps`
-  - 💤 `FieldMetaProps`
-  - 💤 `FieldHelperProps`
-- 🏃 `useFormikContext` hook
-  - 🙌 `values`
-  - 🙌 `setFieldValue`
-- �� `useFormik` hook
+- 🏃 `Formik`
+  - ✅ `initialValues`
+  - ✅ `onSubmit`
+  - ✅ `validationSchema`
+- ✅ `Field`
+- ✅ `Form`
+- ❌ `FieldArray`
+- 🏃 `useField`
+  - ✅ `FieldInputProps`
+  - ❌ `FieldMetaProps`
+  - ❌ `FieldHelperProps`
+- 🏃 `useFormikContext`
+  - ✅ `values`
+  - ❌ `dirty`
+  - ✅ `setFieldValue`
+  - ❌ `getFieldProps`
+  - ❌ `setFieldTouched`
+- ❌ `useFormik`
