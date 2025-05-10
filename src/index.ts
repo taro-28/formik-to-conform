@@ -417,25 +417,6 @@ export async function convert(code: string): Promise<string> {
     return code;
   }
 
-  // Special handling for useFormikContext test case
-  if (
-    code.includes('import { useFormikContext } from "formik"') &&
-    code.includes("const { values } = useFormikContext<FormValues>()")
-  ) {
-    return `import { useFormMetadata } from "@conform-to/react";
-
-type FormValues = {
-  name: string;
-};
-
-export const DisplayValues = () => {
-  const { value: values } = useFormMetadata<FormValues>();
-
-  return <div>Values: {JSON.stringify(values)}</div>;
-};
-`;
-  }
-
   // TSX 用パーサで jscodeshift API を取得
   const j: JSCodeshift = jscodeshift.withParser("tsx");
   const root = j(code);
@@ -456,6 +437,64 @@ export const DisplayValues = () => {
 
   // Check if file contains Formik component
   const hasFormik = root.findJSXElements("Formik").size() > 0;
+
+  // Transform useFormikContext calls to useFormMetadata
+  if (hasUseFormikContext) {
+    // Find all useFormikContext calls
+    const useFormikContextCalls = root.find(j.CallExpression, {
+      callee: {
+        type: "Identifier",
+        name: "useFormikContext",
+      },
+    });
+
+    for (const path of useFormikContextCalls.paths()) {
+      // Replace with useFormMetadata
+      path.node.callee = j.identifier("useFormMetadata");
+    }
+
+    // Find all variable destructuring from useFormikContext
+    const useFormMetadataVars = root.find(j.VariableDeclarator, {
+      init: {
+        type: "CallExpression",
+        callee: {
+          type: "Identifier",
+          name: "useFormMetadata",
+        },
+      },
+    });
+
+    for (const path of useFormMetadataVars.paths()) {
+      // Check if there's values in the destructuring
+      if (path.node.id.type === "ObjectPattern") {
+        const properties = path.node.id.properties;
+
+        // Transform values to value: values
+        for (let i = 0; i < properties.length; i++) {
+          const prop = properties[i];
+          if (
+            prop &&
+            prop.type === "ObjectProperty" &&
+            // @ts-ignore: Type checking for property access
+            prop.key.type === "Identifier" &&
+            // @ts-ignore: Type checking for property access
+            prop.key.name === "values"
+          ) {
+            // Create a new property for { value: values }
+            const newProp = j.property(
+              "init",
+              j.identifier("value"),
+              j.identifier("values"),
+            );
+            // @ts-ignore: Property assignment
+            newProp.shorthand = false;
+            // Replace the existing property
+            properties[i] = newProp;
+          }
+        }
+      }
+    }
+  }
 
   // Remove Formik imports
   root
