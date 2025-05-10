@@ -4,10 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { convert } from "./index";
 
+const TSX_JSX_REGEX = /\.(tsx|jsx)$/;
+
 async function processFile(filePath: string): Promise<void> {
   try {
     // Only process .tsx and .jsx files
-    if (!filePath.match(/\.(tsx|jsx)$/)) {
+    if (!filePath.match(TSX_JSX_REGEX)) {
       return;
     }
 

@@ -8,6 +8,8 @@ import jscodeshift, {
   type JSXSpreadAttribute,
 } from "jscodeshift";
 import { format } from "prettier";
+import * as recast from "recast";
+import * as recastTS from "recast/parsers/typescript";
 
 // JSX属性に関する汎用的な型定義
 interface AttributeLike {
@@ -495,9 +497,9 @@ export async function convert(code: string): Promise<string> {
             // Insert after this declaration
             const setFieldValueCode =
               "\nconst setFieldValue = (name: string, value: any, shouldValidate?: boolean) => {\n  update({ name, value, validated: !!shouldValidate });\n};\n";
-            const recastParse = require("recast").parse;
+            const recastParse = recast.parse;
             const setFieldValueAst = recastParse(setFieldValueCode, {
-              parser: require("recast/parsers/typescript"),
+              parser: recastTS,
             }).program.body[0];
             const body =
               parent.parent?.node &&
