@@ -12,8 +12,12 @@
   - 🙌 `initialValues`
   - 🙌 `onSubmit`
   - 💤 `validationSchema`
-- 🏃 `Field` Component
-- 💤 `Form` Component
+- 🙌 `Field` Component
+- 🙌 `Form` Component
 - 🏃 `useField` hook
+  - 🙌 Generics
+  - 🙌 `FieldInputProps`
+  - 💤 `FieldMetaProps`
+  - 💤 `FieldHelperProps`
 - 💤 `useFormik` hook
 - 💤 `useFormikContext` hook
