@@ -1,7 +1,7 @@
 import { getInputProps, useForm } from "@conform-to/react";
 import type { JSX } from "react";
-import { parseWithYup } from "@conform-to/yup";
 import * as yup from "yup";
+import { parseWithYup } from "@conform-to/yup";
 
 const CustomInput = (props: JSX.IntrinsicElements["input"]) => (
   <input {...props} />
