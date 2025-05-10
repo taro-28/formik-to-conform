@@ -19,7 +19,8 @@
       "suspicious": {
         "noConsole": "off",
         "noConsoleLog": "off",
-        "noReactSpecificProps": "off"
+        "noReactSpecificProps": "off",
+        "noExplicitAny": "off"
       }
     }
   },

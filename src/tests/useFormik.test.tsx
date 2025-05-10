@@ -4,8 +4,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { Form, Formik } from "formik";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { DisplayValues as ConformDisplayValues } from "./useFormMetadata.conform";
-import { DisplayValues as FormikDisplayValues } from "./useFormikContext.formik";
+import { SampleUseFormikContext as ConformDisplayValues } from "./useFormMetadata.conform";
+import { SampleUseFormikContext as FormikDisplayValues } from "./useFormikContext.formik";
 import { testConvert } from "./utils/testConvert";
 
 describe("useFormikContext", async () => {

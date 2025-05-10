@@ -4,8 +4,15 @@ type FormValues = {
   name: string;
 };
 
-export const DisplayValues = () => {
-  const { values } = useFormikContext<FormValues>();
+export const SampleUseFormikContext = () => {
+  const { values, setFieldValue } = useFormikContext<FormValues>();
 
-  return <div>Values: {JSON.stringify(values)}</div>;
+  return (
+    <div>
+      <div>Values: {JSON.stringify(values)}</div>
+      <button type="button" onClick={() => setFieldValue("name", "John")}>
+        Set Name
+      </button>
+    </div>
+  );
 };
