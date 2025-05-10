@@ -584,31 +584,42 @@ export async function convert(code: string): Promise<string> {
     for (const path of useFormMetadataVars.paths()) {
       // Check if there's values in the destructuring
       if (path.node.id.type === "ObjectPattern") {
-        // 変数名をformに置換
-        path.node.id = j.identifier("form");
         // もともと分割代入していた各プロパティ名をform.xxx参照に置換
-        const origProps =
-          path.parent.node.declarations[0].id.type === "ObjectPattern"
-            ? path.parent.node.declarations[0].id.properties
-                .filter(
-                  (p: unknown) =>
-                    (p as { type: string }).type === "ObjectProperty" &&
-                    (p as { key: { type: string } }).key.type === "Identifier",
-                )
-                .map((p: unknown) => (p as { key: { name: string } }).key.name)
-            : [];
+        const origProps = path.node.id.properties
+          .filter(
+            (p: unknown) =>
+              (p as { type: string }).type === "ObjectProperty" &&
+              (p as { key: { type: string } }).key.type === "Identifier",
+          )
+          .map((p: unknown) => (p as { key: { name: string } }).key.name);
+        // 変数名をformに置換し、分割代入行自体もform単体の宣言に置換
+        path.node.id = j.identifier("form");
+        path.parent.node.declarations = [
+          j.variableDeclarator(j.identifier("form"), path.node.init),
+        ];
         // form宣言の直後に個別変数宣言を挿入
         const insertDecls = [];
         // 固定順で個別変数宣言を生成
         const declOrder = [
           "values",
+          // updateはsetFieldValueがある場合も必ず出力
+          ...(origProps.includes("setFieldValue") &&
+          !origProps.includes("update")
+            ? ["update"]
+            : []),
           "update",
           "setFieldValue",
           "setFieldTouched",
           "isSubmitting",
         ];
+        const alreadyAdded = new Set<string>();
         for (const prop of declOrder) {
-          if (origProps.includes(prop)) {
+          if (
+            (origProps.includes(prop) ||
+              (prop === "update" && origProps.includes("setFieldValue"))) &&
+            !alreadyAdded.has(prop)
+          ) {
+            alreadyAdded.add(prop);
             if (prop === "values") {
               insertDecls.push(
                 j.variableDeclaration("const", [
@@ -671,82 +682,7 @@ export async function convert(code: string): Promise<string> {
         if (returnIdx !== -1 && insertDecls.length > 0) {
           parentBody.splice(returnIdx, 0, ...insertDecls);
         }
-        // 参照置換
-        const replaceMap: Record<string, string> = {
-          values: "value",
-          update: "update",
-          setFieldValue: "setFieldValue",
-          setFieldTouched: "setFieldTouched",
-          isSubmitting: "isSubmitting",
-        };
-        const reverseMap: Record<string, string> = {
-          value: "values",
-          update: "update",
-          setFieldValue: "setFieldValue",
-          setFieldTouched: "setFieldTouched",
-          isSubmitting: "isSubmitting",
-        };
-        // form.value → values などの置換
-        for (const memberPath of j(path).find(j.MemberExpression).paths()) {
-          const propName =
-            memberPath.node.property.type === "Identifier"
-              ? memberPath.node.property.name
-              : undefined;
-          if (
-            memberPath.node.object.type === "Identifier" &&
-            memberPath.node.object.name === "form" &&
-            propName &&
-            typeof reverseMap[propName] === "string"
-          ) {
-            memberPath.replace(j.identifier(reverseMap[propName]));
-          }
-        }
-        for (const idPath of j(path).find(j.Identifier).paths()) {
-          const name = idPath.node.name;
-          if (replaceMap[name]) {
-            // 直上がPropertyのkeyならスキップ
-            if (
-              idPath.parent.node.type === "Property" &&
-              idPath.parent.node.key === idPath.node
-            ) {
-              continue;
-            }
-            // すでにform.参照ならスキップ
-            if (
-              idPath.parent.node.type === "MemberExpression" &&
-              idPath.parent.node.object.type === "Identifier" &&
-              idPath.parent.node.object.name === "form"
-            ) {
-              continue;
-            }
-            // すでに個別変数参照ならスキップ（values, update, ...）
-            if (
-              parentBody.some(
-                (stmt: unknown) =>
-                  (stmt as { type?: string; declarations?: unknown[] }).type ===
-                    "VariableDeclaration" &&
-                  (
-                    (stmt as { declarations?: unknown[] }).declarations || []
-                  ).some(
-                    (d: unknown) =>
-                      (d as { id?: { type?: string; name?: string } }).id
-                        ?.type === "Identifier" &&
-                      (d as { id?: { type?: string; name?: string } }).id
-                        ?.name === name,
-                  ),
-              )
-            ) {
-              continue;
-            }
-            // 置換
-            idPath.replace(
-              j.memberExpression(
-                j.identifier("form"),
-                j.identifier(replaceMap[name]),
-              ),
-            );
-          }
-        }
+        // 参照置換は行わない（form.value等はそのまま残す）
       }
     }
   }
