@@ -1,6 +1,6 @@
-import { convert } from "../..";
 import { readFileSync } from "node:fs";
 import { expect } from "vitest";
+import { convert } from "../..";
 
 export const testConvert = async (
   formikFilepath: string,
