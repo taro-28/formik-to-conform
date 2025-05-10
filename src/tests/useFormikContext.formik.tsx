@@ -7,9 +7,9 @@ type FormValues = {
 export const SampleUseFormikContext1 = () => {
   const { values, setFieldValue, setFieldTouched, isSubmitting } =
     useFormikContext<FormValues>();
-  const handleClick = () => {
-    setFieldValue("name", "John");
-    setFieldTouched("name", true);
+  const handleClick = async () => {
+    await setFieldValue("name", "John");
+    await setFieldTouched("name", true);
   };
 
   return (

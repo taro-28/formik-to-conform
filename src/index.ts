@@ -491,6 +491,29 @@ function transformUseFieldDestructurePatterns(
 }
 
 /**
+ * Remove 'await' from calls to setFieldValue and setFieldTouched
+ */
+function removeAwaitFromSetFieldCalls(
+  j: JSCodeshift,
+  root: ReturnType<JSCodeshift>,
+) {
+  // Find all await expressions
+  const awaitExpressions = root.find(j.AwaitExpression, {
+    argument: {
+      type: "CallExpression",
+      callee: {
+        type: "Identifier",
+        name: (name: string) =>
+          name === "setFieldValue" || name === "setFieldTouched",
+      },
+    },
+  });
+
+  // Replace await expressions with their arguments
+  awaitExpressions.replaceWith((path) => path.node.argument);
+}
+
+/**
  * Formik → Conform 変換
  * @param code 変換対象コード（.tsx を想定）
  * @returns 変換後コード
@@ -528,6 +551,9 @@ export async function convert(code: string): Promise<string> {
 
   // Transform useFormikContext calls to useFormMetadata
   if (hasUseFormikContext) {
+    // Remove await from setFieldValue and setFieldTouched calls
+    removeAwaitFromSetFieldCalls(j, root);
+
     // Find all useFormikContext calls
     const useFormikContextCalls = root.find(j.CallExpression, {
       callee: {

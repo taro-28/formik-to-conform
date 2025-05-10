@@ -18,7 +18,7 @@ export const SampleUseFormikContext1 = () => {
   // cannot convert to conform
   const setFieldTouched = (_: string, __: boolean) => {};
   const isSubmitting = false;
-  const handleClick = () => {
+  const handleClick = async () => {
     setFieldValue("name", "John");
     setFieldTouched("name", true);
   };
