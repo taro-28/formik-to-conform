@@ -5,7 +5,9 @@ type FormValues = {
 };
 
 export const SampleUseFormikContext = () => {
-  const { value: values, update } = useFormMetadata<FormValues>();
+  const form = useFormMetadata<FormValues>();
+  const values = form.value;
+  const update = form.update;
   const setFieldValue = (
     name: string,
     value: any,
