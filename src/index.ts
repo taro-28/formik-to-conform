@@ -564,6 +564,8 @@ export async function convert(code: string): Promise<string> {
         const properties = path.node.id.properties;
         let hasSetFieldValue = false;
         let hasUpdate = false;
+        let hasSetFieldTouched = false;
+        let hasIsSubmitting = false;
         for (let i = 0; i < properties.length; i++) {
           const prop = properties[i];
           if (
@@ -588,6 +590,18 @@ export async function convert(code: string): Promise<string> {
               properties.splice(i, 1);
               i--;
             }
+            // setFieldTouched → remove from destructure
+            if (prop.key.name === "setFieldTouched") {
+              hasSetFieldTouched = true;
+              properties.splice(i, 1);
+              i--;
+            }
+            // isSubmitting → remove from destructure
+            if (prop.key.name === "isSubmitting") {
+              hasIsSubmitting = true;
+              properties.splice(i, 1);
+              i--;
+            }
             // update → already present
             if (prop.key.name === "update") {
               hasUpdate = true;
@@ -605,17 +619,40 @@ export async function convert(code: string): Promise<string> {
           properties.push(updateProp);
         }
         // If setFieldValue was present, insert setFieldValue function after the variable declaration
-        if (hasSetFieldValue) {
+        // Also insert setFieldTouched and isSubmitting if they were present
+        if (hasSetFieldValue || hasSetFieldTouched || hasIsSubmitting) {
           // Find the parent statement (VariableDeclaration)
           const parent = path.parent;
           if (parent?.node && parent.node.type === "VariableDeclaration") {
             // Insert after this declaration
-            const setFieldValueCode =
-              "\nconst setFieldValue = (name: string, value: any, shouldValidate?: boolean) => {\n  update({ name, value, validated: !!shouldValidate });\n};\n";
-            const recastParse = recast.parse;
-            const setFieldValueAst = recastParse(setFieldValueCode, {
-              parser: recastTS,
-            }).program.body[0];
+            const extraNodes = [];
+            if (hasSetFieldValue) {
+              const setFieldValueCode =
+                "const setFieldValue = (name: string, value: any, shouldValidate?: boolean) => { update({ name, value, validated: !!shouldValidate }); };";
+              const setFieldValueAst = recast.parse(setFieldValueCode, {
+                parser: recastTS,
+              }).program.body[0];
+              extraNodes.push(setFieldValueAst);
+            }
+            if (hasSetFieldTouched) {
+              const setFieldTouchedCode =
+                "const setFieldTouched = (_: string, __: boolean) => {};";
+              const setFieldTouchedAst = recast.parse(setFieldTouchedCode, {
+                parser: recastTS,
+              }).program.body[0];
+              // コメントノードを追加
+              setFieldTouchedAst.comments = [
+                { type: "CommentLine", value: " cannot convert to conform" },
+              ];
+              extraNodes.push(setFieldTouchedAst);
+            }
+            if (hasIsSubmitting) {
+              const isSubmittingCode = "const isSubmitting = false;";
+              const isSubmittingAst = recast.parse(isSubmittingCode, {
+                parser: recastTS,
+              }).program.body[0];
+              extraNodes.push(isSubmittingAst);
+            }
             const body =
               parent.parent?.node &&
               parent.parent.node.type === "BlockStatement"
@@ -624,7 +661,7 @@ export async function convert(code: string): Promise<string> {
             if (body) {
               const idx = body.indexOf(parent.node);
               if (idx !== -1) {
-                body.splice(idx + 1, 0, setFieldValueAst);
+                body.splice(idx + 1, 0, ...extraNodes);
               }
             }
           }
