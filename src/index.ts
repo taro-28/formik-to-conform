@@ -105,7 +105,32 @@ function findAttribute(
 /* ------------------------------ Transformation Functions ------------------------------ */
 
 /**
- * 要素を getInputProps 化する関数
+ * JSX属性値を抽出し、型やデフォルト値に応じて変換する共通関数
+ */
+function extractJSXAttributeValue(
+  j: JSCodeshift,
+  attr: AttributeLike | null | undefined,
+  opts: {
+    defaultValue?: unknown;
+    toValue?: (value: unknown) => unknown;
+  } = {},
+) {
+  if (!attr || attr.type !== "JSXAttribute") return opts.defaultValue;
+  if (attr.value == null) return opts.defaultValue;
+  if (isStringLiteral(attr.value)) {
+    return opts.toValue ? opts.toValue(attr.value.value) : attr.value.value;
+  }
+  if (
+    isJSXExpressionContainer(attr.value) &&
+    attr.value.expression.type !== "JSXEmptyExpression"
+  ) {
+    return attr.value.expression;
+  }
+  return opts.defaultValue;
+}
+
+/**
+ * 要素を getInputProps 化する関数（属性値抽出・プロパティ生成を共通化）
  */
 function transformToGetInputProps(
   j: JSCodeshift,
@@ -131,111 +156,55 @@ function transformToGetInputProps(
     );
     const idAttr = findAttribute(el.attributes, "id");
     const nameAttr = isField ? findAttribute(el.attributes, "name") : null;
-
-    // Check for custom component via 'as' prop for Field
     const asAttr = isField ? findAttribute(el.attributes, "as") : null;
-
-    // Use name attribute value if available, otherwise fall back to id
     const fieldName = getAttributeValue(nameAttr);
     const idValue = getAttributeValue(idAttr) || fieldName || "field";
 
-    // Collect all existing attributes to preserve
-    const typeAttr = findAttribute(el.attributes, "type");
-    const placeholderAttr = findAttribute(el.attributes, "placeholder");
-    const disabledAttr = findAttribute(el.attributes, "disabled");
+    // 共通化: 属性名・デフォルト値・型変換関数のリスト
+    const ATTRS = [
+      {
+        name: "type",
+        defaultValue: "text",
+        toValue: (v: unknown) => v,
+      },
+      {
+        name: "placeholder",
+        defaultValue: undefined,
+        toValue: (v: unknown) => v,
+      },
+      {
+        name: "disabled",
+        defaultValue: undefined,
+        toValue: (v: unknown) => (v === "true" ? true : v),
+      },
+    ];
 
-    // Build props for getInputProps
     const getInputPropsProperties: ReturnType<typeof j.property>[] = [];
-
-    // Handle type attribute
-    if (typeAttr && typeAttr.type === "JSXAttribute" && typeAttr.value) {
-      if (isStringLiteral(typeAttr.value)) {
-        getInputPropsProperties.push(
-          j.property(
-            "init",
-            j.identifier("type"),
-            j.literal(typeAttr.value.value),
-          ),
-        );
-      } else if (
-        isJSXExpressionContainer(typeAttr.value) &&
-        typeAttr.value.expression.type !== "JSXEmptyExpression"
+    for (const { name, defaultValue, toValue } of ATTRS) {
+      const attr = findAttribute(el.attributes, name);
+      const value = extractJSXAttributeValue(j, attr, {
+        defaultValue,
+        toValue,
+      });
+      if (
+        value !== undefined &&
+        value !== null &&
+        !(typeof value === "object" && Object.keys(value).length === 0)
       ) {
-        // Using a safe cast through unknown
+        let propValue: any;
+        if (
+          typeof value === "string" ||
+          typeof value === "number" ||
+          typeof value === "boolean"
+        ) {
+          propValue = j.literal(value);
+        } else if (typeof value === "object" && "type" in value) {
+          propValue = value;
+        } else {
+          continue; // 不正な値はスキップ
+        }
         getInputPropsProperties.push(
-          j.property(
-            "init",
-            j.identifier("type"),
-            // @ts-ignore: Expression cast issues
-            typeAttr.value.expression,
-          ),
-        );
-      } else {
-        getInputPropsProperties.push(
-          j.property("init", j.identifier("type"), j.literal("text")),
-        );
-      }
-    } else {
-      getInputPropsProperties.push(
-        j.property("init", j.identifier("type"), j.literal("text")),
-      );
-    }
-
-    // Handle placeholder attribute
-    if (
-      placeholderAttr &&
-      placeholderAttr.type === "JSXAttribute" &&
-      placeholderAttr.value
-    ) {
-      if (isStringLiteral(placeholderAttr.value)) {
-        getInputPropsProperties.push(
-          j.property(
-            "init",
-            j.identifier("placeholder"),
-            j.literal(placeholderAttr.value.value),
-          ),
-        );
-      } else if (
-        isJSXExpressionContainer(placeholderAttr.value) &&
-        placeholderAttr.value.expression.type !== "JSXEmptyExpression"
-      ) {
-        getInputPropsProperties.push(
-          j.property(
-            "init",
-            j.identifier("placeholder"),
-            // @ts-ignore: Expression cast issues
-            placeholderAttr.value.expression,
-          ),
-        );
-      }
-    }
-
-    // Handle disabled attribute
-    if (disabledAttr && disabledAttr.type === "JSXAttribute") {
-      if (disabledAttr.value === null) {
-        // <input disabled /> case
-        getInputPropsProperties.push(
-          j.property("init", j.identifier("disabled"), j.literal(true)),
-        );
-      } else if (isStringLiteral(disabledAttr.value)) {
-        getInputPropsProperties.push(
-          j.property(
-            "init",
-            j.identifier("disabled"),
-            j.literal(disabledAttr.value.value === "true"),
-          ),
-        );
-      } else if (
-        isJSXExpressionContainer(disabledAttr.value) &&
-        disabledAttr.value.expression.type !== "JSXEmptyExpression"
-      ) {
-        getInputPropsProperties.push(
-          j.property(
-            "init",
-            j.identifier("disabled"),
-            // @ts-ignore: Expression cast issues
-            disabledAttr.value.expression,
-          ),
+          j.property("init", j.identifier(name), propValue),
         );
       }
     }
@@ -257,18 +226,14 @@ function transformToGetInputProps(
       // Handle Field with custom component (as prop)
       if (asAttr && asAttr.type === "JSXAttribute" && asAttr.value) {
         let customComponentName: string;
-
         if (
           isJSXExpressionContainer(asAttr.value) &&
           asAttr.value.expression.type === "Identifier"
         ) {
-          // Cast to unknown first, then to the target type to avoid type errors
           const identifier = asAttr.value.expression as unknown as {
             name: string;
           };
           customComponentName = identifier.name;
-
-          // Create new element with the custom component
           const customElement = j.jsxElement(
             j.jsxOpeningElement(
               j.jsxIdentifier(customComponentName),
@@ -280,17 +245,14 @@ function transformToGetInputProps(
           );
           elemPath.replace(customElement);
         } else {
-          // Create new input element as fallback
           const inputElement = createInputElement(j, newAttrs);
           elemPath.replace(inputElement);
         }
       } else {
-        // Create new input element and replace Field
         const inputElement = createInputElement(j, newAttrs);
         elemPath.replace(inputElement);
       }
     } else {
-      // Update existing input's attributes
       el.attributes = newAttrs;
     }
   }

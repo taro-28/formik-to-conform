@@ -19,10 +19,10 @@
       "suspicious": {
         "noConsole": "off",
         "noConsoleLog": "off",
-        "noReactSpecificProps": "off",
-        "noExplicitAny": "off"
+        "noReactSpecificProps": "off"
       }
-    }
+    },
+    "ignore": ["src/tests/*.conform.tsx"]
   },
   "formatter": {
     "enabled": true,
