@@ -55,7 +55,7 @@ pnpm cli src
   - ✅ `values`
   - 💤 `dirty`
   - ✅ `setFieldValue`
-  - 💤 `getFieldProps`
+  - 🏃 `getFieldProps`
   - ❌ `setFieldTouched`
   - ❌ `isSubmitting`
 - 💤 `useFormik`
