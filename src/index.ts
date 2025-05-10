@@ -579,25 +579,22 @@ export async function convert(code: string): Promise<string> {
         }
 
         // 実際に参照されている変数だけを特定
-        const referencesSetFieldValue =
+        const usesSetFieldValue =
           propNames.includes("setFieldValue") ||
           referencedNames.includes("setFieldValue");
-        const referencesValues =
+        const usesValues =
           propNames.includes("values") || referencedNames.includes("values");
+        const usesSetFieldTouched =
+          propNames.includes("setFieldTouched") ||
+          referencedNames.includes("setFieldTouched");
+        const usesIsSubmitting =
+          propNames.includes("isSubmitting") ||
+          referencedNames.includes("isSubmitting");
+
         const onlySetFieldValue =
           (propNames.length === 1 && propNames[0] === "setFieldValue") ||
           (referencedNames.length === 1 &&
             referencedNames[0] === "setFieldValue");
-
-        // values, setFieldValue, setFieldTouched, isSubmitting のいずれかが含まれていれば全部生成
-        const needsAll =
-          propNames.some((name) =>
-            ["setFieldTouched", "isSubmitting"].includes(name),
-          ) ||
-          (propNames.includes("values") && propNames.length > 1) ||
-          referencedNames.some((name) =>
-            ["setFieldTouched", "isSubmitting", "update"].includes(name),
-          );
 
         path.node.id = j.identifier("form");
         path.parent.node.declarations = [
@@ -605,7 +602,9 @@ export async function convert(code: string): Promise<string> {
         ];
 
         const insertDecls = [];
-        if (needsAll) {
+
+        // 必要な変数だけを個別に生成する
+        if (usesValues) {
           insertDecls.push(
             j.variableDeclaration("const", [
               j.variableDeclarator(
@@ -613,6 +612,12 @@ export async function convert(code: string): Promise<string> {
                 j.memberExpression(j.identifier("form"), j.identifier("value")),
               ),
             ]),
+          );
+        }
+
+        // setFieldValue が使われていて、update が必要な場合
+        if (usesSetFieldValue && !onlySetFieldValue) {
+          insertDecls.push(
             j.variableDeclaration("const", [
               j.variableDeclarator(
                 j.identifier("update"),
@@ -622,20 +627,43 @@ export async function convert(code: string): Promise<string> {
                 ),
               ),
             ]),
-            recast.parse(
-              "const setFieldValue = (name: string, value: any, shouldValidate?: boolean) => { update({ name, value, validated: !!shouldValidate }); };",
-              { parser: recastTS },
-            ).program.body[0],
-            (() => {
-              const node = recast.parse(
-                "const setFieldTouched = (_: string, __: boolean) => {};",
+          );
+        }
+
+        // setFieldValue の実装
+        if (usesSetFieldValue) {
+          if (onlySetFieldValue) {
+            insertDecls.push(
+              recast.parse(
+                "const setFieldValue = (name: string, value: any, shouldValidate?: boolean) => { form.update({ name, value, validated: !!shouldValidate }); };",
                 { parser: recastTS },
-              ).program.body[0];
-              node.comments = [
-                { type: "CommentLine", value: " cannot convert to conform" },
-              ];
-              return node;
-            })(),
+              ).program.body[0],
+            );
+          } else {
+            insertDecls.push(
+              recast.parse(
+                "const setFieldValue = (name: string, value: any, shouldValidate?: boolean) => { update({ name, value, validated: !!shouldValidate }); };",
+                { parser: recastTS },
+              ).program.body[0],
+            );
+          }
+        }
+
+        // setFieldTouched が参照されている場合
+        if (usesSetFieldTouched) {
+          const node = recast.parse(
+            "const setFieldTouched = (_: string, __: boolean) => {};",
+            { parser: recastTS },
+          ).program.body[0];
+          node.comments = [
+            { type: "CommentLine", value: " cannot convert to conform" },
+          ];
+          insertDecls.push(node);
+        }
+
+        // isSubmitting が参照されている場合
+        if (usesIsSubmitting) {
+          insertDecls.push(
             j.variableDeclaration("const", [
               j.variableDeclarator(
                 j.identifier("isSubmitting"),
@@ -643,70 +671,8 @@ export async function convert(code: string): Promise<string> {
               ),
             ]),
           );
-        } else {
-          // 必要な変数だけを個別に生成
-          if (referencesValues) {
-            insertDecls.push(
-              j.variableDeclaration("const", [
-                j.variableDeclarator(
-                  j.identifier("values"),
-                  j.memberExpression(
-                    j.identifier("form"),
-                    j.identifier("value"),
-                  ),
-                ),
-              ]),
-            );
-          }
-
-          if (referencesSetFieldValue) {
-            // setFieldValue だけを使ってる場合
-            if (onlySetFieldValue) {
-              insertDecls.push(
-                recast.parse(
-                  "const setFieldValue = (name: string, value: any, shouldValidate?: boolean) => { form.update({ name, value, validated: !!shouldValidate }); };",
-                  { parser: recastTS },
-                ).program.body[0],
-              );
-            } else {
-              // 複数の変数を使っている場合は update 変数を挟む
-              insertDecls.push(
-                j.variableDeclaration("const", [
-                  j.variableDeclarator(
-                    j.identifier("update"),
-                    j.memberExpression(
-                      j.identifier("form"),
-                      j.identifier("update"),
-                    ),
-                  ),
-                ]),
-                recast.parse(
-                  "const setFieldValue = (name: string, value: any, shouldValidate?: boolean) => { update({ name, value, validated: !!shouldValidate }); };",
-                  { parser: recastTS },
-                ).program.body[0],
-                (() => {
-                  const node = recast.parse(
-                    "const setFieldTouched = (_: string, __: boolean) => {};",
-                    { parser: recastTS },
-                  ).program.body[0];
-                  node.comments = [
-                    {
-                      type: "CommentLine",
-                      value: " cannot convert to conform",
-                    },
-                  ];
-                  return node;
-                })(),
-                j.variableDeclaration("const", [
-                  j.variableDeclarator(
-                    j.identifier("isSubmitting"),
-                    j.literal(false),
-                  ),
-                ]),
-              );
-            }
-          }
         }
+
         // form宣言の直後に挿入
         const parentBody = j(path)
           .closest(j.Function, () => true)
