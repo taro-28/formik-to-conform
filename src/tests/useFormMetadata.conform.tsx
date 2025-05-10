@@ -18,18 +18,15 @@ export const SampleUseFormikContext = () => {
   // cannot convert to conform
   const setFieldTouched = (_: string, __: boolean) => {};
   const isSubmitting = false;
+  const handleClick = () => {
+    setFieldValue("name", "John");
+    setFieldTouched("name", true);
+  };
 
   return (
     <div>
       <div>Values: {JSON.stringify(values)}</div>
-      <button
-        type="button"
-        disabled={isSubmitting}
-        onClick={() => {
-          setFieldValue("name", "John");
-          setFieldTouched("name", true);
-        }}
-      >
+      <button type="button" disabled={isSubmitting} onClick={handleClick}>
         Set Name
       </button>
     </div>

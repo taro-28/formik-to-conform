@@ -233,7 +233,7 @@ function transformToGetInputProps(
     if (isField) {
       // Handle Field with custom component (as prop)
       if (asAttr && asAttr.type === "JSXAttribute" && asAttr.value) {
-        let customComponentName: string;
+        let customComponentName: string | null = null;
         if (
           isJSXExpressionContainer(asAttr.value) &&
           asAttr.value.expression.type === "Identifier"
@@ -242,6 +242,16 @@ function transformToGetInputProps(
             name: string;
           };
           customComponentName = identifier.name;
+        } else if (
+          typeof asAttr.value === "object" &&
+          asAttr.value !== null &&
+          "type" in asAttr.value &&
+          asAttr.value.type === "StringLiteral" &&
+          "value" in asAttr.value
+        ) {
+          customComponentName = (asAttr.value as { value: string }).value;
+        }
+        if (customComponentName) {
           const customElement = j.jsxElement(
             j.jsxOpeningElement(
               j.jsxIdentifier(customComponentName),
@@ -581,11 +591,16 @@ export async function convert(code: string): Promise<string> {
       const parentBody = j(path)
         .closest(j.Function, () => true)
         .get(0).node.body.body;
-      const returnIdx = parentBody.findIndex(
-        (stmt: { type?: string }) => stmt.type === "ReturnStatement",
+      // form宣言の直後に挿入
+      const formIdx = parentBody.findIndex(
+        (stmt: { type?: string; declarations?: unknown[] }) =>
+          stmt.type === "VariableDeclaration" &&
+          stmt.declarations &&
+          (stmt.declarations[0] as { id?: { name?: string } })?.id?.name ===
+            "form",
       );
-      if (returnIdx !== -1) {
-        parentBody.splice(returnIdx, 0, ...insertDecls);
+      if (formIdx !== -1) {
+        parentBody.splice(formIdx + 1, 0, ...insertDecls);
       }
     }
   }
