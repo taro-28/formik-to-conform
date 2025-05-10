@@ -9,6 +9,9 @@
 ---
 
 - 🏃 `Formik` Component
+  - 🙌 `initialValues`
+  - 🙌 `onSubmit`
+  - 💤 `validationSchema`
 - 🏃 `Field` Component
 - 💤 `Form` Component
 - 🏃 `useField` hook
