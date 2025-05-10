@@ -14,6 +14,8 @@ interface AttributeLike {
   value?: unknown;
 }
 
+/* ------------------------------ Type Guards ------------------------------ */
+
 /**
  * 文字列リテラル型であるかをチェックする型ガード
  */
@@ -26,23 +28,6 @@ function isStringLiteral(
     "type" in value &&
     value.type === "StringLiteral"
   );
-}
-
-/**
- * JSX属性から値を安全に取り出す
- */
-function getAttributeValue(
-  attr: AttributeLike | null | undefined,
-): string | null {
-  if (!(attr && "value" in attr && attr.value)) {
-    return null;
-  }
-
-  if (isStringLiteral(attr.value)) {
-    return attr.value.value;
-  }
-
-  return null;
 }
 
 /**
@@ -81,6 +66,84 @@ function isJSXExpressionContainer(value: unknown): value is {
   );
 }
 
+/* ------------------------------ Attribute Helpers ------------------------------ */
+
+/**
+ * JSX属性から値を安全に取り出す
+ */
+function getAttributeValue(
+  attr: AttributeLike | null | undefined,
+): string | null {
+  if (!(attr && "value" in attr && attr.value)) {
+    return null;
+  }
+
+  if (isStringLiteral(attr.value)) {
+    return attr.value.value;
+  }
+
+  return null;
+}
+
+/**
+ * JSX属性を名前で検索
+ */
+function findAttribute(
+  attributes: any[] | undefined | null,
+  name: string,
+): AttributeLike | null | undefined {
+  return attributes?.find(
+    (a) => a.type === "JSXAttribute" && a.name?.name === name,
+  );
+}
+
+/**
+ * Create a JSX attribute property
+ */
+function createProperty(j: JSCodeshift, name: string, value: any) {
+  return j.property("init", j.identifier(name), value);
+}
+
+/**
+ * Handle attribute transformation for getInputProps
+ */
+function handleAttributeForGetInputProps(
+  j: JSCodeshift,
+  properties: Array<ReturnType<typeof j.property>>,
+  attr: AttributeLike | null | undefined,
+  propName: string,
+  defaultValue?: any,
+) {
+  if (!attr || attr.type !== "JSXAttribute") {
+    if (defaultValue !== undefined) {
+      properties.push(createProperty(j, propName, defaultValue));
+    }
+    return;
+  }
+
+  if (attr.value === null) {
+    // <input disabled /> case
+    properties.push(createProperty(j, propName, j.literal(true)));
+  } else if (isStringLiteral(attr.value)) {
+    if (propName === "disabled") {
+      properties.push(
+        createProperty(j, propName, j.literal(attr.value.value === "true")),
+      );
+    } else {
+      properties.push(createProperty(j, propName, j.literal(attr.value.value)));
+    }
+  } else if (
+    isJSXExpressionContainer(attr.value) &&
+    attr.value.expression.type !== "JSXEmptyExpression"
+  ) {
+    properties.push(createProperty(j, propName, attr.value.expression));
+  } else if (defaultValue !== undefined) {
+    properties.push(createProperty(j, propName, defaultValue));
+  }
+}
+
+/* ------------------------------ Transformation Functions ------------------------------ */
+
 /**
  * 要素を getInputProps 化する関数
  */
@@ -96,124 +159,42 @@ function transformToGetInputProps(
 
   for (const elemPath of elements.paths()) {
     const el = elemPath.node.openingElement;
-    const idAttr = el.attributes?.find(
-      (a) => a.type === "JSXAttribute" && a.name?.name === "id",
-    );
-    const nameAttr = isField
-      ? el.attributes?.find(
-          (a) => a.type === "JSXAttribute" && a.name?.name === "name",
-        )
-      : null;
-
-    // Check for custom component via 'as' prop for Field
-    const asAttr = isField
-      ? el.attributes?.find(
-          (a) => a.type === "JSXAttribute" && a.name?.name === "as",
-        )
-      : null;
+    const idAttr = findAttribute(el.attributes, "id");
+    const nameAttr = isField ? findAttribute(el.attributes, "name") : null;
+    const asAttr = isField ? findAttribute(el.attributes, "as") : null;
 
     // Use name attribute value if available, otherwise fall back to id
     const fieldName = getAttributeValue(nameAttr);
     const idValue = getAttributeValue(idAttr) || fieldName || "field";
 
-    // Collect all existing attributes to preserve
-    const typeAttr = el.attributes?.find(
-      (a) => a.type === "JSXAttribute" && a.name?.name === "type",
-    );
-    const placeholderAttr = el.attributes?.find(
-      (a) => a.type === "JSXAttribute" && a.name?.name === "placeholder",
-    );
-    const disabledAttr = el.attributes?.find(
-      (a) => a.type === "JSXAttribute" && a.name?.name === "disabled",
-    );
+    // Collect attributes to handle
+    const typeAttr = findAttribute(el.attributes, "type");
+    const placeholderAttr = findAttribute(el.attributes, "placeholder");
+    const disabledAttr = findAttribute(el.attributes, "disabled");
 
     // Build props for getInputProps
-    const getInputPropsProperties = [];
+    const getInputPropsProperties: Array<ReturnType<typeof j.property>> = [];
 
-    // Handle type attribute
-    if (typeAttr && typeAttr.type === "JSXAttribute" && typeAttr.value) {
-      if (isStringLiteral(typeAttr.value)) {
-        getInputPropsProperties.push(
-          j.property(
-            "init",
-            j.identifier("type"),
-            j.literal(typeAttr.value.value),
-          ),
-        );
-      } else if (
-        isJSXExpressionContainer(typeAttr.value) &&
-        typeAttr.value.expression.type !== "JSXEmptyExpression"
-      ) {
-        getInputPropsProperties.push(
-          j.property("init", j.identifier("type"), typeAttr.value.expression),
-        );
-      } else {
-        getInputPropsProperties.push(
-          j.property("init", j.identifier("type"), j.literal("text")),
-        );
-      }
-    } else {
-      getInputPropsProperties.push(
-        j.property("init", j.identifier("type"), j.literal("text")),
-      );
-    }
-
-    // Handle placeholder attribute
-    if (
-      placeholderAttr &&
-      placeholderAttr.type === "JSXAttribute" &&
-      placeholderAttr.value
-    ) {
-      if (isStringLiteral(placeholderAttr.value)) {
-        getInputPropsProperties.push(
-          j.property(
-            "init",
-            j.identifier("placeholder"),
-            j.literal(placeholderAttr.value.value),
-          ),
-        );
-      } else if (
-        isJSXExpressionContainer(placeholderAttr.value) &&
-        placeholderAttr.value.expression.type !== "JSXEmptyExpression"
-      ) {
-        getInputPropsProperties.push(
-          j.property(
-            "init",
-            j.identifier("placeholder"),
-            placeholderAttr.value.expression,
-          ),
-        );
-      }
-    }
-
-    // Handle disabled attribute
-    if (disabledAttr && disabledAttr.type === "JSXAttribute") {
-      if (disabledAttr.value === null) {
-        // <input disabled /> case
-        getInputPropsProperties.push(
-          j.property("init", j.identifier("disabled"), j.literal(true)),
-        );
-      } else if (isStringLiteral(disabledAttr.value)) {
-        getInputPropsProperties.push(
-          j.property(
-            "init",
-            j.identifier("disabled"),
-            j.literal(disabledAttr.value.value === "true"),
-          ),
-        );
-      } else if (
-        isJSXExpressionContainer(disabledAttr.value) &&
-        disabledAttr.value.expression.type !== "JSXEmptyExpression"
-      ) {
-        getInputPropsProperties.push(
-          j.property(
-            "init",
-            j.identifier("disabled"),
-            disabledAttr.value.expression,
-          ),
-        );
-      }
-    }
+    // Handle various attributes
+    handleAttributeForGetInputProps(
+      j,
+      getInputPropsProperties,
+      typeAttr,
+      "type",
+      j.literal("text"),
+    );
+    handleAttributeForGetInputProps(
+      j,
+      getInputPropsProperties,
+      placeholderAttr,
+      "placeholder",
+    );
+    handleAttributeForGetInputProps(
+      j,
+      getInputPropsProperties,
+      disabledAttr,
+      "disabled",
+    );
 
     const newAttrs = [
       j.jsxSpreadAttribute(
@@ -237,7 +218,11 @@ function transformToGetInputProps(
           isJSXExpressionContainer(asAttr.value) &&
           asAttr.value.expression.type === "Identifier"
         ) {
-          customComponentName = asAttr.value.expression.name;
+          // Cast to unknown first, then to the target type to avoid type errors
+          const identifier = asAttr.value.expression as unknown as {
+            name: string;
+          };
+          customComponentName = identifier.name;
 
           // Create new element with the custom component
           const customElement = j.jsxElement(
@@ -252,20 +237,12 @@ function transformToGetInputProps(
           elemPath.replace(customElement);
         } else {
           // Create new input element as fallback
-          const inputElement = j.jsxElement(
-            j.jsxOpeningElement(j.jsxIdentifier("input"), newAttrs, true),
-            null,
-            [],
-          );
+          const inputElement = createInputElement(j, newAttrs);
           elemPath.replace(inputElement);
         }
       } else {
         // Create new input element and replace Field
-        const inputElement = j.jsxElement(
-          j.jsxOpeningElement(j.jsxIdentifier("input"), newAttrs, true),
-          null,
-          [],
-        );
+        const inputElement = createInputElement(j, newAttrs);
         elemPath.replace(inputElement);
       }
     } else {
@@ -273,6 +250,17 @@ function transformToGetInputProps(
       el.attributes = newAttrs;
     }
   }
+}
+
+/**
+ * Create a JSX input element
+ */
+function createInputElement(j: JSCodeshift, attributes: any[]) {
+  return j.jsxElement(
+    j.jsxOpeningElement(j.jsxIdentifier("input"), attributes as any, true),
+    null,
+    [],
+  );
 }
 
 /**
@@ -306,7 +294,7 @@ function transformUseFieldInputs(
             j.callExpression(j.identifier("getInputProps"), [
               j.identifier("field"),
               j.objectExpression([
-                j.property("init", j.identifier("type"), j.literal("text")),
+                createProperty(j, "type", j.literal("text")),
               ]),
             ]),
           );
@@ -358,32 +346,20 @@ function transformFormComponents(
 }
 
 /**
- * Formik → Conform 変換
- * @param code 変換対象コード（.tsx を想定）
- * @returns 変換後コード
+ * Handle imports transformation
  */
-export async function convert(code: string): Promise<string> {
-  // TSX 用パーサで jscodeshift API を取得
-  const j: JSCodeshift = jscodeshift.withParser("tsx");
-  const root = j(code);
-
-  /* ------------------------------ import 変換 ------------------------------ */
-
-  // Check if file contains useField from formik
-  const formikImports = root.find(j.ImportDeclaration, {
-    source: { value: "formik" },
-  });
-
-  const hasUseField =
-    formikImports
-      .find(j.ImportSpecifier, { imported: { name: "useField" } })
-      .size() > 0;
-
-  // Check if file contains Formik component
-  const hasFormik = root.findJSXElements("Formik").size() > 0;
-
+function handleImports(
+  j: JSCodeshift,
+  root: ReturnType<JSCodeshift>,
+  hasUseField: boolean,
+  hasFormik: boolean,
+) {
   // 1) Formik import を削除
-  formikImports.remove();
+  root
+    .find(j.ImportDeclaration, {
+      source: { value: "formik" },
+    })
+    .remove();
 
   // 2) Conform import が無ければ追加
   if (
@@ -414,9 +390,55 @@ export async function convert(code: string): Promise<string> {
       ? firstImport.insertBefore(conformImport)
       : root.get().node.program.body.unshift(conformImport);
   }
+}
+
+/**
+ * Replace onSubmit attribute with form.onSubmit
+ */
+function updateOnSubmitAttr(j: JSCodeshift, formJSX: JSXElement) {
+  const onSubmitAttrs = j(formJSX).find(j.JSXAttribute, {
+    name: { name: "onSubmit" },
+  });
+
+  for (const attrPath of onSubmitAttrs.paths()) {
+    attrPath
+      .get("value")
+      .replace(
+        j.jsxExpressionContainer(
+          j.memberExpression(j.identifier("form"), j.identifier("onSubmit")),
+        ),
+      );
+  }
+}
+
+/**
+ * Formik → Conform 変換
+ * @param code 変換対象コード（.tsx を想定）
+ * @returns 変換後コード
+ */
+export async function convert(code: string): Promise<string> {
+  // TSX 用パーサで jscodeshift API を取得
+  const j: JSCodeshift = jscodeshift.withParser("tsx");
+  const root = j(code);
+
+  /* ------------------------------ import 変換 ------------------------------ */
+  // Check if file contains useField from formik
+  const formikImports = root.find(j.ImportDeclaration, {
+    source: { value: "formik" },
+  });
+
+  const hasUseField =
+    formikImports
+      .find(j.ImportSpecifier, { imported: { name: "useField" } })
+      .size() > 0;
+
+  // Check if file contains Formik component
+  const hasFormik = root.findJSXElements("Formik").size() > 0;
+
+  // Update imports
+  handleImports(j, root, hasUseField, hasFormik);
 
   /* ------------------ Transform useField in components ------------------ */
-  // Replace instances of useField from formik to @conform-to/react
   if (hasUseField) {
     transformUseFieldInputs(j, root);
   }
@@ -425,22 +447,16 @@ export async function convert(code: string): Promise<string> {
   transformFormComponents(j, root);
 
   /* --------------------------- <Formik> 置き換え --------------------------- */
-
   for (const path of root.findJSXElements("Formik").paths()) {
     const opening = path.node.openingElement;
     const attrs = opening.attributes;
     // initialValues, onSubmit 抽出
-    const initAttr = attrs?.find(
-      (a) =>
-        a.type === "JSXAttribute" &&
-        a.name.type === "JSXIdentifier" &&
-        a.name.name === "initialValues",
-    );
+    const initAttr = findAttribute(attrs, "initialValues");
 
     const defaultValueExpr =
       initAttr && initAttr.type === "JSXAttribute" && initAttr.value
-        ? initAttr.value.type === "JSXExpressionContainer"
-          ? initAttr.value.expression
+        ? (initAttr.value as any).type === "JSXExpressionContainer"
+          ? (initAttr.value as any).expression
           : null
         : null;
 
@@ -478,18 +494,7 @@ export async function convert(code: string): Promise<string> {
     }
 
     /* ---- form.onSubmit に差し替え ---- */
-    const onSubmitAttrs = j(formJSX).find(j.JSXAttribute, {
-      name: { name: "onSubmit" },
-    });
-    for (const attrPath of onSubmitAttrs.paths()) {
-      attrPath
-        .get("value")
-        .replace(
-          j.jsxExpressionContainer(
-            j.memberExpression(j.identifier("form"), j.identifier("onSubmit")),
-          ),
-        );
-    }
+    updateOnSubmitAttr(j, formJSX);
 
     /* ---- 要素を getInputProps 化 ---- */
     // Transform <input> elements
