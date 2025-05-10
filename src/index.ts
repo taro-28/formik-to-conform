@@ -150,13 +150,14 @@ function transformToGetInputProps(
 
   for (const elemPath of elements.paths()) {
     const el = elemPath.node.openingElement;
-    // Remove onChange, onBlur, and value attributes
+    // Remove onChange, onBlur, onClick, and value attributes
     el.attributes = (el.attributes || []).filter(
       (attr) =>
         !(
           attr.type === "JSXAttribute" &&
           (attr.name?.name === "onChange" ||
             attr.name?.name === "onBlur" ||
+            attr.name?.name === "onClick" ||
             attr.name?.name === "value")
         ),
     );
@@ -382,6 +383,120 @@ function updateOnSubmitAttr(j: JSCodeshift, formJSX: JSXElement) {
 }
 
 /**
+ * ------------------ Transform useField destructure patterns ------------------
+ */
+function transformUseFieldDestructurePatterns(
+  j: JSCodeshift,
+  root: ReturnType<JSCodeshift>,
+) {
+  for (const path of root.find(j.VariableDeclarator).paths()) {
+    const node = path.node;
+    if (
+      node.init &&
+      node.init.type === "CallExpression" &&
+      node.init.callee.type === "Identifier" &&
+      node.init.callee.name === "useField" &&
+      node.id.type === "ArrayPattern" &&
+      node.id.elements.length === 3 &&
+      node.id.elements[0]?.type === "ObjectPattern" &&
+      node.id.elements[1] === null &&
+      node.id.elements[2]?.type === "ObjectPattern"
+    ) {
+      // [{ value }, , { setValue }] → [field, form]
+      const fieldId = j.identifier("field");
+      const formId = j.identifier("form");
+      path.node.id = j.arrayPattern([fieldId, formId]);
+      // value/setValueの変数宣言を分割代入の直後に必ず挿入
+      const parentBody = path.parent.parent?.node?.body;
+      if (Array.isArray(parentBody)) {
+        const idx = parentBody.indexOf(path.parent.node);
+        if (idx !== -1) {
+          // const value = field.value;
+          const valueDecl = j.variableDeclaration("const", [
+            j.variableDeclarator(
+              j.identifier("value"),
+              j.memberExpression(fieldId, j.identifier("value")),
+            ),
+          ]);
+          // const setValue = (value, shouldValidate) => form.update({ name, value, validated: !!shouldValidate });
+          let nameArg = null;
+          if (
+            node.init &&
+            node.init.type === "CallExpression" &&
+            Array.isArray(node.init.arguments) &&
+            node.init.arguments.length > 0 &&
+            node.init.arguments[0] !== undefined &&
+            node.init.arguments[0].type !== "SpreadElement"
+          ) {
+            nameArg = node.init.arguments[0];
+          } else {
+            nameArg = j.literal("user");
+          }
+          const valueProp = j.property(
+            "init",
+            j.identifier("value"),
+            j.identifier("value"),
+          );
+          valueProp.shorthand = true;
+          // 型引数を取得（TSのみ対応）
+          let valueType = null;
+          // biome-ignore lint/suspicious/noExplicitAny: 型パラメータ取得のため any を許容
+          const callExpr = node.init as unknown as { typeParameters?: any };
+          if (
+            callExpr.typeParameters &&
+            callExpr.typeParameters.type === "TSTypeParameterInstantiation" &&
+            callExpr.typeParameters.params.length > 0
+          ) {
+            valueType = callExpr.typeParameters.params[0];
+          }
+          const valueParam = valueType
+            ? Object.assign(j.identifier("value"), {
+                typeAnnotation: j.tsTypeAnnotation(valueType),
+              })
+            : j.identifier("value");
+          const shouldValidateParam = Object.assign(
+            j.identifier("shouldValidate"),
+            {
+              optional: true,
+              typeAnnotation: j.tsTypeAnnotation(j.tsBooleanKeyword()),
+            },
+          );
+          const setValueDecl = j.variableDeclaration("const", [
+            j.variableDeclarator(
+              j.identifier("setValue"),
+              j.arrowFunctionExpression(
+                [valueParam, shouldValidateParam],
+                j.callExpression(
+                  j.memberExpression(formId, j.identifier("update")),
+                  [
+                    j.objectExpression([
+                      j.property("init", j.identifier("name"), nameArg),
+                      valueProp,
+                      j.property(
+                        "init",
+                        j.identifier("validated"),
+                        j.unaryExpression(
+                          "!",
+                          j.unaryExpression(
+                            "!",
+                            j.identifier("shouldValidate"),
+                          ),
+                        ),
+                      ),
+                    ]),
+                  ],
+                ),
+              ),
+            ),
+          ]);
+          parentBody.splice(idx + 1, 0, valueDecl, setValueDecl);
+        }
+      }
+    }
+  }
+}
+
+/**
  * Formik → Conform 変換
  * @param code 変換対象コード（.tsx を想定）
  * @returns 変換後コード
@@ -582,6 +697,7 @@ export async function convert(code: string): Promise<string> {
 
   /* ------------------ Transform useField in components ------------------ */
   if (hasUseField) {
+    transformUseFieldDestructurePatterns(j, root);
     transformUseFieldInputs(j, root);
   }
 
