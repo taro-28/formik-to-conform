@@ -35,7 +35,8 @@ pnpm cli src
 
 - ✅ implemented
 - 🏃 implementing
-- ❌ not implemented
+- 💤 not implemented
+- ❌ cannot be implemented
 
 ---
 
@@ -45,15 +46,16 @@ pnpm cli src
   - ✅ `validationSchema`
 - ✅ `Field`
 - ✅ `Form`
-- ❌ `FieldArray`
+- 💤 `FieldArray`
 - 🏃 `useField`
   - ✅ `FieldInputProps`
-  - ❌ `FieldMetaProps`
-  - ❌ `FieldHelperProps`
+  - 💤 `FieldMetaProps`
+  - 💤 `FieldHelperProps`
 - 🏃 `useFormikContext`
   - ✅ `values`
-  - ❌ `dirty`
+  - 💤 `dirty`
   - ✅ `setFieldValue`
-  - ❌ `getFieldProps`
+  - 💤 `getFieldProps`
   - ❌ `setFieldTouched`
-- ❌ `useFormik`
+  - ❌ `isSubmitting`
+- 💤 `useFormik`
