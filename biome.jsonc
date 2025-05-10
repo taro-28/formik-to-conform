@@ -4,6 +4,9 @@
     "enabled": true,
     "ignore": ["src/tests/*.conform.tsx"]
   },
+  "files": {
+    "ignore": ["dist"]
+  },
   "linter": {
     "rules": {
       "all": true,
