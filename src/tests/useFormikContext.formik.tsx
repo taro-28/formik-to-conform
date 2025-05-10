@@ -27,3 +27,13 @@ export const SampleUseFormikContext2 = () => {
 
   return <div>Values: {JSON.stringify(values)}</div>;
 };
+
+export const SampleUseFormikContext3 = () => {
+  const { setFieldValue } = useFormikContext<FormValues>();
+
+  return (
+    <button type="button" onClick={() => setFieldValue("name", "John")}>
+      Set Name
+    </button>
+  );
+};

@@ -39,3 +39,20 @@ export const SampleUseFormikContext2 = () => {
 
   return <div>Values: {JSON.stringify(values)}</div>;
 };
+
+export const SampleUseFormikContext3 = () => {
+  const form = useFormMetadata<FormValues>();
+  const setFieldValue = (
+    name: string,
+    value: any,
+    shouldValidate?: boolean,
+  ) => {
+    form.update({ name, value, validated: !!shouldValidate });
+  };
+
+  return (
+    <button type="button" onClick={() => setFieldValue("name", "John")}>
+      Set Name
+    </button>
+  );
+};
