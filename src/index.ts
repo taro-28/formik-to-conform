@@ -729,7 +729,7 @@ export async function convert(code: string): Promise<string> {
         // setFieldTouched が参照されている場合
         if (usesSetFieldTouched) {
           const node = recast.parse(
-            "const setFieldTouched = (_: string, __: boolean) => {};",
+            "const setFieldTouched = (_: string, __: boolean, ___?: boolean) => {};",
             { parser: recastTS },
           ).program.body[0];
           node.comments = [

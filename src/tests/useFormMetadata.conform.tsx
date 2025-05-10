@@ -17,7 +17,7 @@ export const SampleUseFormikContext1 = () => {
   };
   const fields = form.getFieldset();
   // cannot convert to conform
-  const setFieldTouched = (_: string, __: boolean) => {};
+  const setFieldTouched = (_: string, __: boolean, ___?: boolean) => {};
   const isSubmitting = false;
   const handleClick = async () => {
     setFieldValue("name", "John");
