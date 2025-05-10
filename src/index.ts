@@ -408,110 +408,72 @@ function transformUseFieldDestructurePatterns(
       // value/setValueの変数宣言を分割代入の直後に必ず挿入
       const parentBody = path.parent.parent?.node?.body;
       if (Array.isArray(parentBody)) {
-        const idx = parentBody.indexOf(path.parent.node);
-        if (idx !== -1) {
-          // return文の直前を探す
-          const returnIdx = parentBody.findIndex(
-            (stmt: { type?: string }) => stmt.type === "ReturnStatement",
-          );
-          // const value = field.value;
-          const valueDecl = j.variableDeclaration("const", [
-            j.variableDeclarator(
-              j.identifier("value"),
-              j.memberExpression(fieldId, j.identifier("value")),
-            ),
-          ]);
-          // const setValue = (value, shouldValidate) => form.update({ name, value, validated: !!shouldValidate });
-          let nameArg = null;
-          if (
-            node.init &&
-            node.init.type === "CallExpression" &&
-            Array.isArray(node.init.arguments) &&
-            node.init.arguments.length > 0 &&
-            node.init.arguments[0] !== undefined &&
-            node.init.arguments[0].type !== "SpreadElement"
-          ) {
-            if (node.init.arguments[0].type === "StringLiteral") {
-              nameArg = node.init.arguments[0];
-            } else {
-              nameArg = j.literal("user");
-            }
-          } else {
-            nameArg = j.literal("user");
-          }
-          const valueProp = j.property(
-            "init",
+        const returnIdx = parentBody.findIndex(
+          (stmt: { type?: string }) => stmt.type === "ReturnStatement",
+        );
+        const valueDecl = j.variableDeclaration("const", [
+          j.variableDeclarator(
             j.identifier("value"),
-            j.identifier("value"),
-          );
-          valueProp.shorthand = true;
-          // 型引数を取得（TSのみ対応）
-          let valueType = null;
-          // biome-ignore lint/suspicious/noExplicitAny: 型パラメータ取得のため any を許容
-          const callExpr = node.init as unknown as { typeParameters?: any };
-          if (
-            callExpr.typeParameters &&
-            callExpr.typeParameters.type === "TSTypeParameterInstantiation" &&
-            callExpr.typeParameters.params.length > 0
-          ) {
-            valueType = callExpr.typeParameters.params[0];
-          }
-          const valueParam = valueType
-            ? Object.assign(j.identifier("value"), {
-                typeAnnotation: j.tsTypeAnnotation(valueType),
-              })
-            : j.identifier("value");
-          const shouldValidateParam = Object.assign(
-            j.identifier("shouldValidate"),
-            {
-              optional: true,
-              typeAnnotation: j.tsTypeAnnotation(j.tsBooleanKeyword()),
-            },
-          );
-          const setValueDecl = j.variableDeclaration("const", [
-            j.variableDeclarator(
-              j.identifier("setValue"),
-              j.arrowFunctionExpression(
-                [valueParam, shouldValidateParam],
-                j.callExpression(
-                  j.memberExpression(formId, j.identifier("update")),
-                  [
-                    j.objectExpression([
-                      j.property("init", j.identifier("name"), nameArg),
-                      valueProp,
+            j.memberExpression(fieldId, j.identifier("value")),
+          ),
+        ]);
+        // 型引数を取得（TSのみ対応）
+        let valueType = null;
+        // biome-ignore lint/suspicious/noExplicitAny: 型パラメータ取得のため any を許容
+        const callExpr = node.init as unknown as { typeParameters?: any };
+        if (
+          callExpr.typeParameters &&
+          callExpr.typeParameters.type === "TSTypeParameterInstantiation" &&
+          callExpr.typeParameters.params.length > 0
+        ) {
+          valueType = callExpr.typeParameters.params[0];
+        }
+        const valueParam = valueType
+          ? Object.assign(j.identifier("value"), {
+              typeAnnotation: j.tsTypeAnnotation(valueType),
+            })
+          : j.identifier("value");
+        const shouldValidateParam = Object.assign(
+          j.identifier("shouldValidate"),
+          {
+            optional: true,
+            typeAnnotation: j.tsTypeAnnotation(j.tsBooleanKeyword()),
+          },
+        );
+        const setValueDecl = j.variableDeclaration("const", [
+          j.variableDeclarator(
+            j.identifier("setValue"),
+            j.arrowFunctionExpression(
+              [valueParam, shouldValidateParam],
+              j.callExpression(
+                j.memberExpression(formId, j.identifier("update")),
+                [
+                  j.objectExpression([
+                    j.property("init", j.identifier("name"), j.literal("user")),
+                    Object.assign(
                       j.property(
                         "init",
-                        j.identifier("validated"),
-                        j.unaryExpression(
-                          "!",
-                          j.unaryExpression(
-                            "!",
-                            j.identifier("shouldValidate"),
-                          ),
-                        ),
+                        j.identifier("value"),
+                        j.identifier("value"),
                       ),
-                    ]),
-                  ],
-                ),
+                      { shorthand: true },
+                    ),
+                    j.property(
+                      "init",
+                      j.identifier("validated"),
+                      j.unaryExpression(
+                        "!",
+                        j.unaryExpression("!", j.identifier("shouldValidate")),
+                      ),
+                    ),
+                  ]),
+                ],
               ),
             ),
-          ]);
-          // return文の直前に挿入
-          if (returnIdx !== -1) {
-            parentBody.splice(returnIdx, 0, valueDecl, setValueDecl);
-          } else {
-            parentBody.splice(idx + 1, 0, valueDecl, setValueDecl);
-          }
-          // return文がJSX式のみの場合はreturn文を除去し、JSX式だけを残す
-          if (
-            returnIdx !== -1 &&
-            parentBody[returnIdx].type === "ReturnStatement" &&
-            parentBody[returnIdx].argument &&
-            (parentBody[returnIdx].argument.type === "JSXElement" ||
-              parentBody[returnIdx].argument.type === "JSXFragment")
-          ) {
-            parentBody[returnIdx] = parentBody[returnIdx].argument;
-          }
+          ),
+        ]);
+        if (returnIdx !== -1) {
+          parentBody.splice(returnIdx, 0, valueDecl, setValueDecl);
         }
       }
     }
