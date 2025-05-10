@@ -48,5 +48,6 @@ pnpm cli src
   - 🙌 `FieldInputProps`
   - 💤 `FieldMetaProps`
   - 💤 `FieldHelperProps`
+- 🏃 `useFormikContext` hook
+  - 🙌 `values`
 - 💤 `useFormik` hook
-- 💤 `useFormikContext` hook
