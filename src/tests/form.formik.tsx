@@ -1,5 +1,6 @@
 import { Field, Form, Formik } from "formik";
 import type { JSX } from "react";
+import * as yup from "yup";
 
 const CustomInput = (props: JSX.IntrinsicElements["input"]) => (
   <input {...props} />
@@ -17,6 +18,9 @@ export const SampleForm = () => {
       onSubmit={(values) => {
         console.log(values);
       }}
+      validationSchema={yup.object({
+        rawInput: yup.string().required("Raw Input is required"),
+      })}
     >
       {(props) => (
         <form onSubmit={props.handleSubmit}>

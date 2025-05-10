@@ -1,5 +1,7 @@
 import { getInputProps, useForm } from "@conform-to/react";
 import type { JSX } from "react";
+import { parseWithYup } from "@conform-to/yup";
+import * as yup from "yup";
 
 const CustomInput = (props: JSX.IntrinsicElements["input"]) => (
   <input {...props} />
@@ -12,6 +14,13 @@ export const SampleForm = () => {
       fieldInput: "initial fieldInput value",
       manyAttributesInput: "initial manyAttributesInput value",
       customInput: 123,
+    },
+    onValidate({ formData }) {
+      return parseWithYup(formData, {
+        schema: yup.object({
+          rawInput: yup.string().required("Raw Input is required"),
+        }),
+      });
     },
   });
 
