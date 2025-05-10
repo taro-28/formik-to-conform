@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { FormProvider, getFormProps, useForm } from "@conform-to/react";
 import { cleanup, render, screen } from "@testing-library/react";
