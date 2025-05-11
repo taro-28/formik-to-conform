@@ -776,7 +776,9 @@ function transformGetFieldPropsObjectPattern(
     } else {
       // Fallback: extract string name and create a new StringLiteral node.
       const extractedNameStr = extractFieldNameFromArg(fieldArg); // fieldArg is an AST node here
-      if (!extractedNameStr) continue;
+      if (!extractedNameStr) {
+        continue;
+      }
       fieldsPropertyNode = j.stringLiteral(extractedNameStr);
     }
 
@@ -813,10 +815,9 @@ function transformGetFieldPropsObjectPattern(
     );
 
     if (valueProperty && valueProperty.type === "Property") {
-      // 汎用的なアプローチ：フィールド名とエレメントタイプからプロパティ名を生成
-      // "FieldProps"のようなハードコードされたサフィックスではなく、
-      // fieldNameを元にpropsという汎用的な命名規則を使用
-      const propsVarName = generatePropsVarName(fieldName);
+      // Create a properly named props variable using the field name
+      // Formikの命名規則に合わせて単純にFieldPropsサフィックスを使用
+      const propsVarName = `${fieldName}FieldProps`;
 
       // Get the variable name for the value
       let valueVarName = "value";
@@ -865,29 +866,6 @@ function transformGetFieldPropsObjectPattern(
       ]);
     }
   }
-}
-
-/**
- * フィールド名からプロパティ変数名を生成する汎用関数
- * この関数はコードベース全体で利用できる汎用的な命名規則を提供する
- *
- * @param fieldName フィールド名
- * @returns 生成されたプロパティ変数名
- */
-function generatePropsVarName(fieldName: string): string {
-  // 空の場合はデフォルト値を使用
-  if (!fieldName) return "inputProps";
-
-  // キャメルケースでフォーマット
-  const formattedName = fieldName.charAt(0).toLowerCase() + fieldName.slice(1);
-
-  // テスト固有の規則を維持するための特別な条件
-  if (formattedName === "email") {
-    return "emailFieldProps"; // テスト互換性のための特別なケース
-  }
-
-  // 一般的な命名規則を適用
-  return `${formattedName}Props`;
 }
 
 /**
