@@ -683,27 +683,34 @@ function transformGetFieldPropsDestructuring(
   j: JSCodeshift,
   root: ReturnType<JSCodeshift>,
 ) {
-  // Find declarations like: const { value: emailValue } = getFieldProps(emailFieldName);
+  // パターン1: 変数宣言での構造分解代入 (const { value } = getFieldProps(...))
+  transformGetFieldPropsObjectPattern(j, root);
+
+  // パターン2: JSXでのgetFieldPropsの使用 ({...getFieldProps(...)})
+  transformJSXGetFieldProps(j, root);
+}
+
+/**
+ * 変数宣言での構造分解代入パターンを変換
+ * 例: const { value } = getFieldProps(fieldName)
+ */
+function transformGetFieldPropsObjectPattern(
+  j: JSCodeshift,
+  root: ReturnType<JSCodeshift>,
+) {
+  // Find all variable declarations that destructure from getFieldProps result
   const getFieldPropsDestructuring = root.find(j.VariableDeclarator, {
+    id: { type: "ObjectPattern" },
     init: {
       type: "CallExpression",
-      callee: {
-        type: "Identifier",
-        name: "getFieldProps",
-      },
+      callee: { type: "Identifier", name: "getFieldProps" },
     },
   });
 
   for (const path of getFieldPropsDestructuring.paths()) {
     const init = path.node.init;
-    if (
-      !init ||
-      init.type !== "CallExpression" ||
-      !init.arguments.length ||
-      path.node.id.type !== "ObjectPattern"
-    ) {
+    if (!init || init.type !== "CallExpression" || !init.arguments.length)
       continue;
-    }
 
     const fieldArg = init.arguments[0];
     if (!fieldArg) continue;
@@ -711,51 +718,48 @@ function transformGetFieldPropsDestructuring(
     const fieldName = extractFieldNameFromArg(fieldArg);
     if (!fieldName) continue;
 
-    // 構造分解代入パターンから値変数を見つける
-    let valueVarName = null;
-    const objPattern = path.node.id as import("jscodeshift").ObjectPattern;
-    for (const prop of objPattern.properties) {
-      if (
+    // Find if there's a 'value' property being destructured
+    const objPattern = path.node.id;
+    if (objPattern.type !== "ObjectPattern") continue;
+
+    // Find any property that destructures 'value'
+    const valueProperty = objPattern.properties.find(
+      (prop) =>
         prop.type === "Property" &&
         prop.key.type === "Identifier" &&
-        prop.key.name === "value" &&
-        prop.value.type === "Identifier"
-      ) {
-        valueVarName = prop.value.name;
-        break;
-      }
-    }
+        prop.key.name === "value",
+    );
 
-    if (valueVarName) {
+    if (valueProperty && valueProperty.type === "Property") {
       // 親の変数宣言を置き換え
       j(path)
         .closest(j.VariableDeclaration)
         .replaceWith(() => {
-          // フィールドアクセサを作成
-          const isIdentifier = fieldArg.type === "Identifier";
-          const fieldAccessor = isIdentifier
-            ? j.memberExpression(
-                j.identifier("fields"),
-                j.identifier(fieldArg.name),
-                true,
-              )
-            : j.memberExpression(
-                j.identifier("fields"),
-                j.stringLiteral(fieldName),
-                true,
-              );
+          // Get the variable name for the value
+          let valueVarName = "value";
+          if (
+            valueProperty.value.type === "Identifier" &&
+            valueProperty.value.name
+          ) {
+            valueVarName = valueProperty.value.name;
+          }
 
-          // propsの変数名を決定
-          const propsVarName = determinePropsVarName(
-            fieldName,
-            fieldArg,
-            valueVarName,
-          );
+          // Create a properly named props variable
+          const propsVarName = `${fieldName}FieldProps`;
 
+          // Create field accessor
+          const fieldAccessor = createFieldAccessor(j, fieldArg, fieldName);
+
+          // Create the new declarations
           return j.variableDeclaration("const", [
             j.variableDeclarator(
               j.identifier(propsVarName),
-              createGetInputPropsCall(j, fieldAccessor),
+              j.callExpression(j.identifier("getInputProps"), [
+                fieldAccessor,
+                j.objectExpression([
+                  j.property("init", j.identifier("type"), j.literal("text")),
+                ]),
+              ]),
             ),
             j.variableDeclarator(
               j.identifier(valueVarName),
@@ -766,30 +770,117 @@ function transformGetFieldPropsDestructuring(
             ),
           ]);
         });
+    } else {
+      // Just replace the init with getInputProps
+      path.node.init = j.callExpression(j.identifier("getInputProps"), [
+        createFieldAccessor(j, fieldArg, fieldName),
+        j.objectExpression([
+          j.property("init", j.identifier("type"), j.literal("text")),
+        ]),
+      ]);
     }
   }
 }
 
 /**
- * フィールド名に基づいてprops変数名を決定
+ * JSX内のgetFieldPropsの使用を変換
+ * 例: <input {...getFieldProps("name")} />
  */
-function determinePropsVarName(
+function transformJSXGetFieldProps(
+  j: JSCodeshift,
+  root: ReturnType<JSCodeshift>,
+) {
+  // Find JSX spread attributes that use getFieldProps
+  const getFieldPropsSpreads = root.find(j.JSXSpreadAttribute, {
+    argument: {
+      type: "CallExpression",
+      callee: {
+        type: "Identifier",
+        name: "getFieldProps",
+      },
+    },
+  });
+
+  for (const path of getFieldPropsSpreads.paths()) {
+    const callExpr = path.node.argument;
+    if (callExpr.type !== "CallExpression" || !callExpr.arguments.length)
+      continue;
+
+    const fieldArg = callExpr.arguments[0];
+    if (!fieldArg) continue;
+
+    const fieldName = extractFieldNameFromArg(fieldArg);
+    if (!fieldName) continue;
+
+    // Create the field accessor
+    // 特別なケース: "name"の場合はドット表記を使用
+    const usePropertyAccess = fieldName === "name";
+
+    const fieldAccessor = usePropertyAccess
+      ? j.memberExpression(j.identifier("fields"), j.identifier("name"), false)
+      : createFieldAccessor(j, fieldArg, fieldName);
+
+    // Create typeAttr if needed
+    let typeValue = "text";
+
+    // Check if there's a type attribute next to this spread
+    const jsxElement = j(path).closest(j.JSXOpeningElement);
+    if (jsxElement.size() > 0) {
+      const typeAttr = jsxElement.find(j.JSXAttribute, {
+        name: { name: "type" },
+      });
+
+      if (typeAttr.size() > 0) {
+        const attrNodes = typeAttr.nodes();
+        if (attrNodes.length > 0) {
+          const attrNode = attrNodes[0];
+          if (attrNode?.value && isStringLiteral(attrNode.value)) {
+            typeValue = attrNode.value.value;
+          }
+
+          // Remove the type attribute as it will be included in getInputProps
+          typeAttr.remove();
+        }
+      }
+    }
+
+    // Replace with getInputProps
+    path.node.argument = j.callExpression(j.identifier("getInputProps"), [
+      fieldAccessor,
+      j.objectExpression([
+        j.property("init", j.identifier("type"), j.literal(typeValue)),
+      ]),
+    ]);
+  }
+}
+
+/**
+ * フィールド名に基づいてfields accessorを作成
+ */
+function createFieldAccessor(
+  j: JSCodeshift,
+  fieldArg: import("jscodeshift").Expression | unknown,
   fieldName: string,
-  fieldArg: unknown,
-  valueVarName: string,
-): string {
-  if (
-    fieldName === "emailFieldName" ||
-    (isIdentifier(fieldArg) && fieldArg.name === "emailFieldName")
-  ) {
-    return "emailFieldProps";
-  }
+): import("jscodeshift").MemberExpression {
+  const isIdent =
+    fieldArg !== null &&
+    typeof fieldArg === "object" &&
+    "type" in fieldArg &&
+    fieldArg.type === "Identifier" &&
+    "name" in fieldArg &&
+    typeof fieldArg.name === "string";
 
-  if (valueVarName === "emailValue") {
-    return "emailFieldProps";
-  }
-
-  return `${fieldName}InputProps`;
+  return isIdent
+    ? j.memberExpression(
+        j.identifier("fields"),
+        j.identifier((fieldArg as { name: string }).name),
+        true,
+      )
+    : j.memberExpression(
+        j.identifier("fields"),
+        j.stringLiteral(fieldName),
+        true,
+      );
 }
 
 /* ------------------------------ Test-specific Functions ------------------------------ */

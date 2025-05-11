@@ -48,3 +48,15 @@ export const SampleUseFormikContext3 = () => {
     </button>
   );
 };
+
+const fieldName = "name";
+export const SampleUseFormikContext4 = () => {
+  const { getFieldProps } = useFormikContext<FormValues>();
+  const { value } = getFieldProps(fieldName);
+
+  return (
+    <div>
+      <div>Field Value: {value}</div>
+    </div>
+  );
+};

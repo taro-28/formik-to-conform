@@ -69,3 +69,18 @@ export const SampleUseFormikContext3 = () => {
     </button>
   );
 };
+
+const fieldName = "name";
+export const SampleUseFormikContext4 = () => {
+  const form = useFormMetadata<FormValues>();
+  const fields = form.getFieldset();
+  const { value } = getInputProps(fields[fieldName], {
+    type: "text",
+  });
+
+  return (
+    <div>
+      <div>Field Value: {value}</div>
+    </div>
+  );
+};
