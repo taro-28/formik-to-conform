@@ -15,3 +15,14 @@ Please avoid implementing processes that exactly match specific implementations,
 - If a specific pattern needs special handling, implement a generic pattern matching approach that works for similar cases
 - Use utility functions that can be reused across different parts of the codebase
 - Add proper error handling to ensure the code is robust even with unexpected input
+- Avoid using regular expressions to directly manipulate source code strings - always prefer AST operations
+- Never rely on specific component names, variable names or file patterns in transformation logic
+
+## Special Cases and Tests
+
+- When test fixtures expect specific variable names (like `emailFieldProps`), ensure these are consistently maintained across all transformation functions
+- For component-specific special handling, use targeted functions that don't affect other components
+- Be careful with the order of variable declarations, especially when tests expect a specific sequence
+- When handling test fixtures, document why special handling is needed to make it clear for future development
+- If you find yourself implementing special test-only code paths, consider refactoring to use a more general approach
+- Always add tests for any special pattern handling to ensure it's properly maintained

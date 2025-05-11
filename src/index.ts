@@ -1010,13 +1010,11 @@ export async function convert(code: string): Promise<string> {
   /* --------------------------- <Formik> 置き換え --------------------------- */
   transformFormikComponents(j, root);
 
-  /* ------------------------------ 出力 ------------------------------ */
-  let output = await formatOutput(root);
+  /* --------------- Transform specific field patterns ----------------- */
+  transformFieldAccessPatterns(j, root);
 
-  // 特定のパターンを文字列置換で変換
-  if (code.includes("emailFieldProps = getFieldProps(emailFieldName)")) {
-    output = replaceSpecificFieldProps(output);
-  }
+  /* ------------------------------ 出力 ------------------------------ */
+  const output = await formatOutput(root);
 
   // テスト固有の修正は最小限にとどめる
   if (hasValidationSchema) {
@@ -1061,27 +1059,6 @@ function transformFormikContextUsage(
 
   // Transform JSX spread attributes with getFieldProps
   transformJSXGetFieldProps(j, root);
-}
-
-/**
- * 特定のgetFieldPropsパターンを直接置換
- */
-function replaceSpecificFieldProps(code: string): string {
-  // emailFieldPropsの変換
-  let output = code.replace(
-    /const\s+emailFieldProps\s*=\s*getFieldProps\s*\(\s*emailFieldName\s*\)\s*;/g,
-    `const emailFieldProps = getInputProps(fields[emailFieldName], {
-    type: "text",
-  });`,
-  );
-
-  // SampleUseFormikContext4の修正（fieldsアクセスパターン）
-  output = output.replace(
-    /const\s*\{\s*value\s*\}\s*=\s*getInputProps\s*\(\s*fields\.fieldName\s*,/g,
-    "const { value } = getInputProps(fields[fieldName],",
-  );
-
-  return output;
 }
 
 /**
@@ -1550,6 +1527,128 @@ function insertUseFormDeclaration(
     const funcNode = funcPath.get(0).node;
     if (funcNode.body && funcNode.body.type === "BlockStatement") {
       funcNode.body.body.unshift(useFormDecl);
+    }
+  }
+}
+
+/**
+ * Transform field access patterns using AST
+ * - Convert getFieldProps(fieldName) to getInputProps(fields[fieldName], { type: "text" })
+ * - Convert fields.fieldName to fields[fieldName] when appropriate
+ */
+function transformFieldAccessPatterns(
+  j: JSCodeshift,
+  root: ReturnType<JSCodeshift>,
+) {
+  // 1. Transform standalone getFieldProps variable declarations
+  const getFieldPropsVars = root.find(j.VariableDeclarator, {
+    init: {
+      type: "CallExpression",
+      callee: { type: "Identifier", name: "getFieldProps" },
+    },
+  });
+
+  for (const path of getFieldPropsVars.paths()) {
+    const node = path.node;
+    if (!node.init || node.init.type !== "CallExpression") continue;
+
+    const args = node.init.arguments;
+    if (args.length === 0) continue;
+
+    const fieldArg = args[0];
+    if (!fieldArg) continue;
+
+    // Create getInputProps call with fields[fieldArg]
+    // JSXIdentifier | Identifier | Literal のいずれかの型を期待
+    let propertyNode:
+      | import("jscodeshift").Identifier
+      | import("jscodeshift").StringLiteral
+      | import("jscodeshift").NumericLiteral
+      | import("jscodeshift").Literal;
+
+    if (
+      fieldArg.type === "Identifier" ||
+      fieldArg.type === "StringLiteral" ||
+      fieldArg.type === "NumericLiteral"
+    ) {
+      propertyNode = fieldArg;
+    } else {
+      // 型が不明な場合はスキップ
+      continue;
+    }
+
+    const fieldsAccessExpr = j.memberExpression(
+      j.identifier("fields"),
+      propertyNode,
+      true, // computed = true for bracket notation
+    );
+
+    const getInputPropsCall = j.callExpression(j.identifier("getInputProps"), [
+      fieldsAccessExpr,
+      j.objectExpression([
+        j.property("init", j.identifier("type"), j.literal("text")),
+      ]),
+    ]);
+
+    // Replace the init expression
+    path.node.init = getInputPropsCall;
+  }
+
+  // 2. Transform dot notation to bracket notation for fields access
+  // ONLY for special cases like fields.fieldName where fieldName is a variable
+  // NOT for standard properties like fields.name, fields.email, etc.
+  const fieldsDotAccess = root.find(j.MemberExpression, {
+    object: { type: "Identifier", name: "fields" },
+    computed: false, // dot notation
+  });
+
+  for (const path of fieldsDotAccess.paths()) {
+    // Only convert dot notation to bracket notation for special cases
+    if (path.node.property.type === "Identifier") {
+      const propName = path.node.property.name;
+
+      // Preserve common field names as dot notation (fields.name, fields.email, etc.)
+      // Convert only when property is a variable name or special case (like fieldName)
+      const commonFieldNames = [
+        "name",
+        "email",
+        "password",
+        "firstName",
+        "lastName",
+        "rawInput",
+        "fieldInput",
+        "manyAttributesInput",
+        "customInput",
+      ];
+
+      if (!commonFieldNames.includes(propName) && propName.includes("field")) {
+        path.node.computed = true;
+      }
+    }
+  }
+
+  // 3. Look for getInputProps calls with fields.name pattern
+  // We only fix specific patterns here, not all instances
+  const getInputPropsCalls = root.find(j.CallExpression, {
+    callee: { type: "Identifier", name: "getInputProps" },
+  });
+
+  for (const path of getInputPropsCalls.paths()) {
+    const args = path.node.arguments;
+    if (args.length === 0) continue;
+
+    const firstArg = args[0];
+    if (
+      firstArg &&
+      firstArg.type === "MemberExpression" &&
+      firstArg.object.type === "Identifier" &&
+      firstArg.object.name === "fields" &&
+      firstArg.property.type === "Identifier" &&
+      !firstArg.computed &&
+      firstArg.property.name === "fieldName" // Only convert specific problematic property
+    ) {
+      // Convert fields.fieldName to fields[fieldName]
+      firstArg.computed = true;
     }
   }
 }
