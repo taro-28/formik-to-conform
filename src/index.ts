@@ -189,20 +189,6 @@ function createGetInputPropsCall(
 /* ------------------------------ Transformation Functions ------------------------------ */
 
 /**
- * JSX属性値を抽出し、型やデフォルト値に応じて変換する共通関数
- */
-function extractJSXAttributeValue(
-  _: JSCodeshift,
-  attr: AttributeLike | null | undefined,
-  opts: {
-    defaultValue?: unknown;
-    toValue?: (value: unknown) => unknown;
-  } = {},
-) {
-  return extractAttributeValue(attr, opts);
-}
-
-/**
  * 要素を getInputProps 化する関数（属性値抽出・プロパティ生成を共通化）
  */
 function transformToGetInputProps(
@@ -1556,7 +1542,7 @@ function transformFormikComponents(
  */
 function insertUseFormDeclaration(
   j: JSCodeshift,
-  path: import("jscodeshift").NodePath,
+  path: import("jscodeshift").ASTPath,
   defaultValueExpr: Expression | null,
   validationSchemaExpr: Expression | null,
 ) {
