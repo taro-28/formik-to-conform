@@ -1,0 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Implementation Guidelines
+
+Please avoid implementing processes that exactly match specific implementations, as they lack versatility and reusability.
