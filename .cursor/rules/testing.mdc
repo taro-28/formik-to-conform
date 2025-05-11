@@ -6,3 +6,10 @@ alwaysApply: true
 # Testing
 
 To run tests: `pnpm test  --run`
+
+## Test Fixtures
+
+- Test fixtures expect specific variable naming conventions (e.g., `emailFieldProps` instead of `emailInputProps`)
+- The ordering of variable declarations in test fixtures is important and should be maintained
+- When fixing test failures, ensure you understand both the input and expected output formats
+- Pay special attention to how components like `SampleUseFormikContext1` are transformed
