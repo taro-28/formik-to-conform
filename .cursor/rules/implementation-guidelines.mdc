@@ -1,8 +1,17 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 # Implementation Guidelines
 
 Please avoid implementing processes that exactly match specific implementations, as they lack versatility and reusability.
+
+## Avoid Hardcoding
+
+- Never use hardcoded string replacements for specific test cases
+- Implementations should be general and handle a variety of inputs
+- All transformations must be done programmatically through AST manipulation
+- If a specific pattern needs special handling, implement a generic pattern matching approach that works for similar cases
+- Use utility functions that can be reused across different parts of the codebase
+- Add proper error handling to ensure the code is robust even with unexpected input
