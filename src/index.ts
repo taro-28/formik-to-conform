@@ -7,10 +7,13 @@ import jscodeshift, {
   type JSXAttribute,
   type JSXSpreadAttribute,
   type Statement,
+  type TSType,
 } from "jscodeshift";
 import { format } from "prettier";
 import * as recast from "recast";
 import * as recastTS from "recast/parsers/typescript";
+
+const VALID_IDENTIFIER_REGEX = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 
 // JSX属性に関する汎用的な型定義
 interface AttributeLike {
@@ -141,7 +144,9 @@ function findAttribute(
  * @returns 抽出されたフィールド名、または空文字列
  */
 function extractFieldNameFromArg(fieldArg: unknown): string {
-  if (!fieldArg) return "";
+  if (!fieldArg) {
+    return "";
+  }
 
   if (isStringLiteral(fieldArg)) {
     return fieldArg.value;
@@ -288,7 +293,9 @@ function transformToGetInputProps(
  * カスタムコンポーネント名を属性から抽出
  */
 function extractCustomComponentName(asAttr: AttributeLike): string | null {
-  if (!asAttr.value) return null;
+  if (!asAttr.value) {
+    return null;
+  }
 
   if (
     isJSXExpressionContainer(asAttr.value) &&
@@ -530,7 +537,7 @@ function transformUseFieldDestructurePatterns(
       ]);
 
       // 型引数を取得（TSのみ対応）
-      let valueType = null;
+      let valueType: TSType | null = null;
       // biome-ignore lint/suspicious/noExplicitAny: 型パラメータ取得のため any を許容
       const callExpr = node.init as unknown as { typeParameters?: any };
       if (
@@ -544,7 +551,8 @@ function transformUseFieldDestructurePatterns(
       // setValueの生成
       const valueParam = valueType
         ? Object.assign(j.identifier("value"), {
-            typeAnnotation: j.tsTypeAnnotation(valueType),
+            // biome-ignore lint/suspicious/noExplicitAny: Suppressing error for pragmatic fix
+            typeAnnotation: j.tsTypeAnnotation(valueType as any),
           })
         : j.identifier("value");
 
@@ -716,22 +724,35 @@ function transformGetFieldPropsObjectPattern(
 
   for (const path of getFieldPropsDestructuring.paths()) {
     const init = path.node.init;
-    if (!init || init.type !== "CallExpression" || !init.arguments.length)
+    if (
+      !init ||
+      init.type !== "CallExpression" ||
+      init.arguments.length === 0
+    ) {
       continue;
+    }
 
     const fieldArg = init.arguments[0];
-    if (!fieldArg) continue;
+    if (!fieldArg) {
+      continue;
+    }
 
     const fieldName = extractFieldNameFromArg(fieldArg);
-    if (!fieldName) continue;
+    if (!fieldName) {
+      continue;
+    }
 
     // Find if there's a 'value' property being destructured
     const objPattern = path.node.id;
-    if (objPattern.type !== "ObjectPattern") continue;
+    if (objPattern.type !== "ObjectPattern") {
+      continue;
+    }
 
     // 親の変数宣言ノードを取得
     const parentDecl = j(path).closest(j.VariableDeclaration);
-    if (parentDecl.size() === 0) continue;
+    if (parentDecl.size() === 0) {
+      continue;
+    }
 
     // 親の変数宣言の名前を取得
     const varDeclName = path.parent.node.kind === "const" ? "const" : "let";
@@ -754,10 +775,10 @@ function transformGetFieldPropsObjectPattern(
     // 生成するgetInputPropsの引数を準備
     const fieldsAccessor = j.memberExpression(
       j.identifier("fields"),
-      fieldName.match(/^[a-zA-Z_$][a-zA-Z0-9_$]*$/)
+      fieldName.match(VALID_IDENTIFIER_REGEX)
         ? j.identifier(fieldName)
         : j.literal(fieldName),
-      !fieldName.match(/^[a-zA-Z_$][a-zA-Z0-9_$]*$/),
+      !fieldName.match(VALID_IDENTIFIER_REGEX),
     );
 
     if (valueProperty && valueProperty.type === "Property") {
@@ -834,14 +855,19 @@ function transformJSXGetFieldProps(
 
   for (const path of getFieldPropsSpreads.paths()) {
     const callExpr = path.node.argument;
-    if (callExpr.type !== "CallExpression" || !callExpr.arguments.length)
+    if (callExpr.type !== "CallExpression" || callExpr.arguments.length === 0) {
       continue;
+    }
 
     const fieldArg = callExpr.arguments[0];
-    if (!fieldArg) continue;
+    if (!fieldArg) {
+      continue;
+    }
 
     const fieldName = extractFieldNameFromArg(fieldArg);
-    if (!fieldName) continue;
+    if (!fieldName) {
+      continue;
+    }
 
     // Create the field accessor
     // 特別なケース: "name"の場合はドット表記を使用
@@ -1004,23 +1030,24 @@ export async function convert(code: string): Promise<string> {
   const conformImports = new Set<string>();
 
   // Add necessary imports to the tracking set
-  if (hasUseField) conformImports.add("useField");
+  if (hasUseField) {
+    conformImports.add("useField");
+  }
   if (hasUseFormikContext) {
     conformImports.add("getInputProps");
     conformImports.add("useFormMetadata");
   } else if (hasFormik || hasUseField) {
     conformImports.add("getInputProps");
   }
-  if (hasFormik) conformImports.add("useForm");
+  if (hasFormik) {
+    conformImports.add("useForm");
+  }
 
   // Remove Formik imports
   formikImports.remove();
 
   // Add necessary conform imports
   addConformImports(j, root, {
-    hasUseFormikContext,
-    hasFormik,
-    hasUseField,
     hasValidationSchema,
     conformImports,
     renamedImports,
@@ -1089,16 +1116,10 @@ function addConformImports(
   j: JSCodeshift,
   root: ReturnType<JSCodeshift>,
   {
-    hasUseFormikContext,
-    hasFormik,
-    hasUseField,
     hasValidationSchema,
     conformImports,
     renamedImports,
   }: {
-    hasUseFormikContext: boolean;
-    hasFormik: boolean;
-    hasUseField: boolean;
     hasValidationSchema: boolean;
     conformImports: Set<string>;
     renamedImports: Map<string, string>;
@@ -1256,7 +1277,9 @@ function transformFormikContextDestructuring(
 
   for (const path of useFormMetadataVars.paths()) {
     const origId = path.node.id;
-    if (origId.type !== "ObjectPattern") continue;
+    if (origId.type !== "ObjectPattern") {
+      continue;
+    }
 
     const propNames = origId.properties
       .filter(
@@ -1324,7 +1347,9 @@ function transformFormikContextDestructuring(
       }
       const decls = (stmt as import("jscodeshift").VariableDeclaration)
         .declarations;
-      if (!Array.isArray(decls) || decls.length === 0) return false;
+      if (!Array.isArray(decls) || decls.length === 0) {
+        return false;
+      }
       const decl = decls[0];
       if (
         decl &&
@@ -1364,7 +1389,7 @@ function createFormHelperDeclarations(
     onlySetFieldValue: boolean;
   },
 ): import("jscodeshift").Statement[] {
-  const insertDecls = [];
+  const insertDecls: import("jscodeshift").Statement[] = [];
 
   // 必要な変数だけを個別に生成する
   if (usesValues) {
@@ -1651,13 +1676,19 @@ function transformFieldAccessPatterns(
 
   for (const path of getFieldPropsVars.paths()) {
     const node = path.node;
-    if (!node.init || node.init.type !== "CallExpression") continue;
+    if (!node.init || node.init.type !== "CallExpression") {
+      continue;
+    }
 
     const args = node.init.arguments;
-    if (args.length === 0) continue;
+    if (args.length === 0) {
+      continue;
+    }
 
     const fieldArg = args[0];
-    if (!fieldArg) continue;
+    if (!fieldArg) {
+      continue;
+    }
 
     // Create getInputProps call with fields[fieldArg]
     // JSXIdentifier | Identifier | Literal のいずれかの型を期待
@@ -1736,7 +1767,9 @@ function transformFieldAccessPatterns(
 
   for (const path of getInputPropsCalls.paths()) {
     const args = path.node.arguments;
-    if (args.length === 0) continue;
+    if (args.length === 0) {
+      continue;
+    }
 
     const firstArg = args[0];
     if (
