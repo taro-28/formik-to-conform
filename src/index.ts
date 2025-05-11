@@ -978,12 +978,17 @@ export async function convert(code: string): Promise<string> {
 
   // Check specifically for renamed imports like { useField as renamedUseField }
   const renamedImports = new Map<string, string>();
+
+  // Find import specifiers and check if they're renamed
   for (const path of formikImports.find(j.ImportSpecifier).paths()) {
     if (
-      path.node.imported?.name &&
-      path.node.local?.name !== path.node.imported.name
+      path.node.imported &&
+      path.node.local &&
+      path.node.imported.type === "Identifier" &&
+      path.node.local.type === "Identifier" &&
+      path.node.imported.name !== path.node.local.name
     ) {
-      renamedImports.set(path.node.imported.name, path.node.local?.name);
+      renamedImports.set(path.node.imported.name, path.node.local.name);
     }
   }
 
