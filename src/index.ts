@@ -891,88 +891,6 @@ function createFieldAccessor(
 /* ------------------------------ Test-specific Functions ------------------------------ */
 
 /**
- * getFieldPropsパターンを直接置換
- */
-function replaceGetFieldPropsPattern(code: string): string {
-  // コメント行やHTMLタグを壊さないよう、厳密なパターンマッチング
-  const getFieldPropsPattern =
-    /const\s*\{\s*value\s*:\s*emailValue\s*\}\s*=\s*getFieldProps\s*\(\s*emailFieldName\s*\)\s*;/g;
-
-  return code.replace(
-    getFieldPropsPattern,
-    `const emailFieldProps = getInputProps(fields[emailFieldName], {
-    type: "text",
-  });
-  const emailValue = emailFieldProps.value;`,
-  );
-}
-
-/**
- * 変数宣言の順序を調整
- */
-function fixVariableDeclarationOrder(output: string): string {
-  // handleClickとemailFieldPropsの順序を調整する
-  const handleClickPattern =
-    /(const isSubmitting = false;\s*)(const handleClick = async\(\) => \{[\s\S]*?\}\);\s*)(const emailFieldProps)/s;
-
-  return output.replace(
-    handleClickPattern,
-    (_, isSubmitting, handleClick, emailProps) =>
-      `${isSubmitting}${emailProps}${handleClick}`,
-  );
-}
-
-/**
- * テスト用のSampleUseFormikContext1コンポーネントを修正する
- */
-function fixSampleComponent(output: string): string {
-  if (
-    output.includes("SampleUseFormikContext1") &&
-    output.includes("getFieldProps(emailFieldName)")
-  ) {
-    // Using a more specific pattern targeting just the content between isSubmitting and return
-    const pattern =
-      /(export const SampleUseFormikContext1 = \(\) => \{[\s\S]*?const isSubmitting = false;)([\s\S]*?)(return \([\s\S]*?\);)/s;
-
-    return output.replace(pattern, (_, prefix, _middle, returnPart) => {
-      return `${prefix}
-  const handleClick = async () => {
-    setFieldValue("name", "John");
-    setFieldTouched("name", true);
-  };
-  const emailFieldProps = getInputProps(fields[emailFieldName], {
-    type: "text",
-  });
-  ${returnPart}`;
-    });
-  }
-  return output;
-}
-
-/**
- * テスト用のSampleUseField2コンポーネントの変数宣言順序を調整
- */
-function fixSampleUseField2Component(output: string): string {
-  if (
-    output.includes("SampleUseField2") &&
-    output.includes("useField<FieldValue>")
-  ) {
-    // Find SampleUseField2 component and reorder declarations to match expected order
-    const sampleUseField2Regex =
-      /(export const SampleUseField2.+?)(const\s+handleClick\s*=\s*async\s*\(\)\s*=>\s*\{.+?\}\s*;?\s*)(const\s+value\s*=.+?;?\s*)(const\s+setValue.+?;?\s*)(const\s+setTouched.+?;?\s*)(\s*return)/gs;
-
-    return output.replace(
-      sampleUseField2Regex,
-      (_, prefix, _handleClick, value, setValue, setTouched, returnStmt) => {
-        // Put declarations in the expected order: value, setValue, setTouched, handleClick
-        return `${prefix}${value}${setValue}${setTouched}const handleClick = async () => { setValue({name: "", age: 20}); setTouched(true); };${returnStmt}`;
-      },
-    );
-  }
-  return output;
-}
-
-/**
  * Validation Schemaが指定されたコードの文字列置換処理
  */
 function fixValidationSchemaFormatting(output: string): string {
@@ -1445,35 +1363,6 @@ async function formatOutput(root: ReturnType<JSCodeshift>): Promise<string> {
       parser: "typescript",
     },
   );
-}
-
-/**
- * テスト固有の修正を適用
- */
-function applyTestSpecificFixes(code: string, originalOutput: string): string {
-  let output = originalOutput;
-
-  if (
-    code.includes("SampleUseField2") &&
-    code.includes("useField<FieldValue>")
-  ) {
-    output = fixSampleUseField2Component(output);
-  }
-
-  // テスト用のSampleUseFormikContext1コンポーネントを特別に修正
-  output = fixSampleComponent(output);
-
-  // getFieldProps パターンの置換
-  if (output.includes("getFieldProps")) {
-    output = replaceGetFieldPropsPattern(output);
-
-    // handleClick と emailInputProps の順序を調整
-    if (output.includes("handleClick") && output.includes("emailInputProps")) {
-      output = fixVariableDeclarationOrder(output);
-    }
-  }
-
-  return output;
 }
 
 /**
