@@ -39,17 +39,21 @@ export const SampleUseFormikContext2 = () => {
   return <div>Values: {JSON.stringify(values)}</div>;
 };
 
+const fieldName = "name";
 export const SampleUseFormikContext3 = () => {
-  const { setFieldValue } = useFormikContext<FormValues>();
+  const { setFieldValue, getFieldProps } = useFormikContext<FormValues>();
+  const nameValue = getFieldProps(fieldName).value;
 
   return (
-    <button type="button" onClick={() => setFieldValue("name", "John")}>
-      Set Name
-    </button>
+    <div>
+      <div>Name Value: {nameValue}</div>
+      <button type="button" onClick={() => setFieldValue("name", "John")}>
+        Set Name
+      </button>
+    </div>
   );
 };
 
-const fieldName = "name";
 export const SampleUseFormikContext4 = () => {
   const { getFieldProps } = useFormikContext<FormValues>();
   const { value } = getFieldProps(fieldName);

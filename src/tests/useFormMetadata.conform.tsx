@@ -53,6 +53,7 @@ export const SampleUseFormikContext2 = () => {
   return <div>Values: {JSON.stringify(values)}</div>;
 };
 
+const fieldName = "name";
 export const SampleUseFormikContext3 = () => {
   const form = useFormMetadata<FormValues>();
   const setFieldValue = (
@@ -62,15 +63,21 @@ export const SampleUseFormikContext3 = () => {
   ) => {
     form.update({ name, value, validated: !!shouldValidate });
   };
+  const fields = form.getFieldset();
+  const nameValue = getInputProps(fields[fieldName], {
+    type: "text",
+  }).value;
 
   return (
-    <button type="button" onClick={() => setFieldValue("name", "John")}>
-      Set Name
-    </button>
+    <div>
+      <div>Name Value: {nameValue}</div>
+      <button type="button" onClick={() => setFieldValue("name", "John")}>
+        Set Name
+      </button>
+    </div>
   );
 };
 
-const fieldName = "name";
 export const SampleUseFormikContext4 = () => {
   const form = useFormMetadata<FormValues>();
   const fields = form.getFieldset();
