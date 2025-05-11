@@ -19,7 +19,7 @@ export const SampleUseFormikContext1 = () => {
     await setFieldValue("name", "John");
     await setFieldTouched("name", true);
   };
-  const { value: emailValue } = getFieldProps(emailFieldName);
+  const emailFieldProps = getFieldProps(emailFieldName);
 
   return (
     <div>
@@ -28,7 +28,7 @@ export const SampleUseFormikContext1 = () => {
         Set Name
       </button>
       <input {...getFieldProps("name")} type="text" />
-      <div>Email: {emailValue}</div>
+      <div>Email: {emailFieldProps.value}</div>
     </div>
   );
 };

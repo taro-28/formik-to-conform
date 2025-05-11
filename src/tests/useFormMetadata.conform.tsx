@@ -22,14 +22,13 @@ export const SampleUseFormikContext1 = () => {
   // cannot convert to conform
   const setFieldTouched = (_: string, __: boolean, ___?: boolean) => {};
   const isSubmitting = false;
-  const emailInputProps = getInputProps(fields[emailFieldName], {
-    type: "text",
-  });
-  const emailValue = emailInputProps.value;
   const handleClick = async () => {
     setFieldValue("name", "John");
     setFieldTouched("name", true);
   };
+  const emailFieldProps = getInputProps(fields[emailFieldName], {
+    type: "text",
+  });
 
   return (
     <div>
@@ -42,7 +41,7 @@ export const SampleUseFormikContext1 = () => {
           type: "text",
         })}
       />
-      <div>Email: {emailValue}</div>
+      <div>Email: {emailFieldProps.value}</div>
     </div>
   );
 };

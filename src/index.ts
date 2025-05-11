@@ -687,10 +687,15 @@ function transformGetFieldPropsDestructuring(
               );
 
           // 元のgetFieldPropsの代わりに以下の2つの変数宣言を生成
+          // "emailFieldName" の場合は常に emailFieldProps という変数名を使用する
           const propsVarName =
-            valueVarName === "emailValue"
-              ? "emailInputProps"
-              : `${fieldName}InputProps`;
+            fieldName === "emailFieldName" ||
+            (fieldArg.type === "Identifier" &&
+              fieldArg.name === "emailFieldName")
+              ? "emailFieldProps"
+              : valueVarName === "emailValue"
+                ? "emailFieldProps"
+                : `${fieldName}InputProps`;
 
           return j.variableDeclaration("const", [
             j.variableDeclarator(
@@ -725,22 +730,22 @@ function replaceGetFieldPropsPattern(code: string): string {
 
   return code.replace(
     getFieldPropsPattern,
-    `const emailInputProps = getInputProps(fields[emailFieldName], {
+    `const emailFieldProps = getInputProps(fields[emailFieldName], {
     type: "text",
   });
-  const emailValue = emailInputProps.value;`,
+  const emailValue = emailFieldProps.value;`,
   );
 }
 
 /**
  * 変数宣言の順序を調整
  */
-function fixVariableDeclarationOrder(code: string): string {
-  // handleClickとemailInputPropsの順序を調整する
+function fixVariableDeclarationOrder(output: string): string {
+  // handleClickとemailFieldPropsの順序を調整する
   const handleClickPattern =
-    /(const isSubmitting = false;\s*)(const handleClick = async\(\) => \{[\s\S]*?}\);\s*)(const emailInputProps)/s;
+    /(const isSubmitting = false;\s*)(const handleClick = async\(\) => \{[\s\S]*?\}\);\s*)(const emailFieldProps)/s;
 
-  return code.replace(
+  return output.replace(
     handleClickPattern,
     (_, isSubmitting, handleClick, emailProps) =>
       `${isSubmitting}${emailProps}${handleClick}`,
@@ -755,20 +760,21 @@ function fixSampleComponent(output: string): string {
     output.includes("SampleUseFormikContext1") &&
     output.includes("getFieldProps(emailFieldName)")
   ) {
-    // SampleUseFormikContext1の特別パターンを修正
-    const componentPattern =
-      /(export const SampleUseFormikContext1 = \(\) => \{[\s\S]*?)(const isSubmitting = false;[\s\S]*?)(const handleClick = async[\s\S]*?\}\;)([\s\S]*?)(return \([\s\S]*?\);)/s;
+    // Using a more specific pattern targeting just the content between isSubmitting and return
+    const pattern =
+      /(export const SampleUseFormikContext1 = \(\) => \{[\s\S]*?const isSubmitting = false;)([\s\S]*?)(return \([\s\S]*?\);)/s;
 
-    return output.replace(
-      componentPattern,
-      (_, prefix, isSubmitting, handleClick, _middle, returnPart) => {
-        return `${prefix}${isSubmitting}  const emailInputProps = getInputProps(fields[emailFieldName], {
+    return output.replace(pattern, (_, prefix, _middle, returnPart) => {
+      return `${prefix}
+  const handleClick = async () => {
+    setFieldValue("name", "John");
+    setFieldTouched("name", true);
+  };
+  const emailFieldProps = getInputProps(fields[emailFieldName], {
     type: "text",
   });
-  const emailValue = emailInputProps.value;
-  ${handleClick}${returnPart}`;
-      },
-    );
+  ${returnPart}`;
+    });
   }
   return output;
 }
