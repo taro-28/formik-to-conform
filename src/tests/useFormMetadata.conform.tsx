@@ -2,7 +2,10 @@ import { getInputProps, useFormMetadata } from "@conform-to/react";
 
 type FormValues = {
   name: string;
+  email: number;
 };
+
+const emailFieldName = "email";
 
 export const SampleUseFormikContext1 = () => {
   const form = useFormMetadata<FormValues>();
@@ -19,6 +22,10 @@ export const SampleUseFormikContext1 = () => {
   // cannot convert to conform
   const setFieldTouched = (_: string, __: boolean, ___?: boolean) => {};
   const isSubmitting = false;
+  const emailInputProps = getInputProps(fields[emailFieldName], {
+    type: "text",
+  });
+  const emailValue = emailInputProps.value;
   const handleClick = async () => {
     setFieldValue("name", "John");
     setFieldTouched("name", true);
@@ -35,6 +42,7 @@ export const SampleUseFormikContext1 = () => {
           type: "text",
         })}
       />
+      <div>Email: {emailValue}</div>
     </div>
   );
 };
