@@ -153,39 +153,6 @@ function extractFieldNameFromArg(fieldArg: unknown): string {
   return "";
 }
 
-/**
- * getInputProps用の共通プロパティを生成
- * @param j JSCodeshift API
- * @param typeValue type属性の値
- * @returns プロパティの配列
- */
-function createInputPropsProperties(
-  j: JSCodeshift,
-  typeValue = "text",
-): import("jscodeshift").Property[] {
-  return [j.property("init", j.identifier("type"), j.literal(typeValue))];
-}
-
-/**
- * getInputProps関数呼び出しを作成
- * @param j JSCodeshift API
- * @param fieldAccessor フィールドアクセサ
- * @param typeValue type属性の値
- * @returns getInputProps関数呼び出しノード
- */
-function createGetInputPropsCall(
-  j: JSCodeshift,
-  fieldAccessor:
-    | import("jscodeshift").MemberExpression
-    | import("jscodeshift").Identifier,
-  typeValue = "text",
-): import("jscodeshift").CallExpression {
-  return j.callExpression(j.identifier("getInputProps"), [
-    fieldAccessor,
-    j.objectExpression(createInputPropsProperties(j, typeValue)),
-  ]);
-}
-
 /* ------------------------------ Transformation Functions ------------------------------ */
 
 /**
