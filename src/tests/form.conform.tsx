@@ -31,21 +31,21 @@ export const SampleForm = () => {
     <form onSubmit={form.onSubmit}>
       <label htmlFor="rawInput">Raw Input</label>
       <input
-        {...getInputProps(fields.rawInput, {
+        {...getInputProps(fields["rawInput"], {
           type: "text",
         })}
         id="rawInput"
       />
       <label htmlFor="fieldInput">Field Input</label>
       <input
-        {...getInputProps(fields.fieldInput, {
+        {...getInputProps(fields["fieldInput"], {
           type: "text",
         })}
         id="fieldInput"
       />
       <label htmlFor="manyAttributesInput">Many Attributes Input</label>
       <input
-        {...getInputProps(fields.manyAttributesInput, {
+        {...getInputProps(fields["manyAttributesInput"], {
           type: "email",
           placeholder: "placeholder",
           disabled: false,
@@ -54,7 +54,7 @@ export const SampleForm = () => {
       />
       <label htmlFor="customInput">Custom Input</label>
       <CustomInput
-        {...getInputProps(fields.customInput, {
+        {...getInputProps(fields["customInput"], {
           type: "number",
         })}
         id="customInput"
@@ -73,7 +73,7 @@ export const SampleFormWithFormComponent = () => {
     <form onSubmit={form.onSubmit}>
       <label htmlFor="name">Name</label>
       <input
-        {...getInputProps(fields.name, {
+        {...getInputProps(fields["name"], {
           type: "text",
         })}
         id="name"

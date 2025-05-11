@@ -13,8 +13,6 @@ import { format } from "prettier";
 import * as recast from "recast";
 import * as recastTS from "recast/parsers/typescript";
 
-const VALID_IDENTIFIER_REGEX = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
-
 // JSX属性に関する汎用的な型定義
 interface AttributeLike {
   type: string;
@@ -245,9 +243,9 @@ function transformToGetInputProps(
       }
     }
 
-    const fieldsMemberExpr = j.memberExpression(
-      j.identifier("fields"),
-      j.identifier(fieldName || idValue),
+    const fieldsMemberExpr = createBracketFieldAccessor(
+      j,
+      j.stringLiteral(fieldName || idValue),
     );
 
     const getInputPropsCall = j.callExpression(j.identifier("getInputProps"), [
@@ -742,6 +740,26 @@ function transformGetFieldPropsObjectPattern(
       continue;
     }
 
+    let fieldsPropertyNode:
+      | import("jscodeshift").Identifier
+      | import("jscodeshift").StringLiteral
+      | import("jscodeshift").NumericLiteral;
+
+    if (fieldArg.type === "Identifier") {
+      fieldsPropertyNode = fieldArg;
+    } else if (fieldArg.type === "StringLiteral") {
+      fieldsPropertyNode = fieldArg;
+    } else if (fieldArg.type === "NumericLiteral") {
+      fieldsPropertyNode = fieldArg;
+    } else {
+      // Fallback: extract string name and create a new StringLiteral node.
+      const extractedNameStr = extractFieldNameFromArg(fieldArg); // fieldArg is an AST node here
+      if (!extractedNameStr) continue;
+      fieldsPropertyNode = j.stringLiteral(extractedNameStr);
+    }
+
+    const fieldsAccessor = createBracketFieldAccessor(j, fieldsPropertyNode);
+
     // Find if there's a 'value' property being destructured
     const objPattern = path.node.id;
     if (objPattern.type !== "ObjectPattern") {
@@ -772,17 +790,8 @@ function transformGetFieldPropsObjectPattern(
         prop.key.name === "value",
     );
 
-    // 生成するgetInputPropsの引数を準備
-    const fieldsAccessor = j.memberExpression(
-      j.identifier("fields"),
-      fieldName.match(VALID_IDENTIFIER_REGEX)
-        ? j.identifier(fieldName)
-        : j.literal(fieldName),
-      !fieldName.match(VALID_IDENTIFIER_REGEX),
-    );
-
     if (valueProperty && valueProperty.type === "Property") {
-      // Create a properly named props variable
+      // Create a properly named props variable using the string field name
       const propsVarName = `${fieldName}FieldProps`;
 
       // Get the variable name for the value
@@ -870,12 +879,7 @@ function transformJSXGetFieldProps(
     }
 
     // Create the field accessor
-    // 特別なケース: "name"の場合はドット表記を使用
-    const usePropertyAccess = fieldName === "name";
-
-    const fieldAccessor = usePropertyAccess
-      ? j.memberExpression(j.identifier("fields"), j.identifier("name"), false)
-      : createFieldAccessor(j, fieldArg, fieldName);
+    const fieldAccessor = createFieldAccessor(j, fieldArg, fieldName);
 
     // Create typeAttr if needed
     let typeValue = "text";
@@ -938,6 +942,19 @@ function createFieldAccessor(
         j.stringLiteral(fieldName),
         true,
       );
+}
+
+/**
+ * Helper function to create field accessor with bracket notation
+ */
+function createBracketFieldAccessor(
+  j: JSCodeshift,
+  fieldPropertyExpr:
+    | import("jscodeshift").Identifier
+    | import("jscodeshift").StringLiteral
+    | import("jscodeshift").NumericLiteral,
+): import("jscodeshift").MemberExpression {
+  return j.memberExpression(j.identifier("fields"), fieldPropertyExpr, true);
 }
 
 /* ------------------------------ Test-specific Functions ------------------------------ */
@@ -1709,11 +1726,7 @@ function transformFieldAccessPatterns(
       continue;
     }
 
-    const fieldsAccessExpr = j.memberExpression(
-      j.identifier("fields"),
-      propertyNode,
-      true, // computed = true for bracket notation
-    );
+    const fieldsAccessExpr = createBracketFieldAccessor(j, propertyNode);
 
     const getInputPropsCall = j.callExpression(j.identifier("getInputProps"), [
       fieldsAccessExpr,
@@ -1726,63 +1739,40 @@ function transformFieldAccessPatterns(
     path.node.init = getInputPropsCall;
   }
 
-  // 2. Transform dot notation to bracket notation for fields access
-  // ONLY for special cases like fields.fieldName where fieldName is a variable
-  // NOT for standard properties like fields.name, fields.email, etc.
-  const fieldsDotAccess = root.find(j.MemberExpression, {
-    object: { type: "Identifier", name: "fields" },
-    computed: false, // dot notation
-  });
-
-  for (const path of fieldsDotAccess.paths()) {
-    // Only convert dot notation to bracket notation for special cases
-    if (path.node.property.type === "Identifier") {
-      const propName = path.node.property.name;
-
-      // Preserve common field names as dot notation (fields.name, fields.email, etc.)
-      // Convert only when property is a variable name or special case (like fieldName)
-      const commonFieldNames = [
-        "name",
-        "email",
-        "password",
-        "firstName",
-        "lastName",
-        "rawInput",
-        "fieldInput",
-        "manyAttributesInput",
-        "customInput",
-      ];
-
-      if (!commonFieldNames.includes(propName) && propName.includes("field")) {
-        path.node.computed = true;
-      }
-    }
-  }
-
-  // 3. Look for getInputProps calls with fields.name pattern
-  // We only fix specific patterns here, not all instances
+  // 2. Transform fields.identifier within getInputProps arguments to fields[identifier]
   const getInputPropsCalls = root.find(j.CallExpression, {
     callee: { type: "Identifier", name: "getInputProps" },
   });
 
   for (const path of getInputPropsCalls.paths()) {
     const args = path.node.arguments;
-    if (args.length === 0) {
-      continue;
-    }
-
+    if (args.length === 0) continue;
     const firstArg = args[0];
     if (
       firstArg &&
       firstArg.type === "MemberExpression" &&
       firstArg.object.type === "Identifier" &&
       firstArg.object.name === "fields" &&
-      firstArg.property.type === "Identifier" &&
-      !firstArg.computed &&
-      firstArg.property.name === "fieldName" // Only convert specific problematic property
+      firstArg.property.type === "Identifier" && // Property is an Identifier node
+      !firstArg.computed // And it's currently dot access (fields.someIdentifier)
     ) {
-      // Convert fields.fieldName to fields[fieldName]
+      // Convert fields.someIdentifier to fields[someIdentifier] (computed access on the Identifier node)
       firstArg.computed = true;
+    }
+  }
+
+  // 3. Transform remaining fields.identifier (dot notation) to fields["identifier"] (bracket with string literal)
+  const fieldsDotAccess = root.find(j.MemberExpression, {
+    object: { type: "Identifier", name: "fields" },
+    computed: false, // Still dot notation
+  });
+
+  for (const path of fieldsDotAccess.paths()) {
+    if (path.node.property.type === "Identifier") {
+      const propIdentifierNode = path.node.property; // This is an Identifier node
+      // Convert fields.someIdentifier to fields["someIdentifier"]
+      path.node.property = j.stringLiteral(propIdentifierNode.name);
+      path.node.computed = true;
     }
   }
 }

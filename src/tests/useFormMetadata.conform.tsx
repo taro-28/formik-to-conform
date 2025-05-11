@@ -37,7 +37,7 @@ export const SampleUseFormikContext1 = () => {
         Set Name
       </button>
       <input
-        {...getInputProps(fields.name, {
+        {...getInputProps(fields["name"], {
           type: "text",
         })}
       />
