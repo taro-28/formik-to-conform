@@ -33,3 +33,21 @@ export const SampleUseField2 = () => {
     </div>
   );
 };
+
+const fieldName = "user";
+
+export const SampleUseField3 = () => {
+  const [{ value }, , { setValue }] = useField<FieldValue>(fieldName);
+  const handleClick = async () => {
+    await setValue({ name: "", age: 20 });
+  };
+
+  return (
+    <div>
+      User: {JSON.stringify(value)}
+      <button type="button" onClick={handleClick}>
+        Reset
+      </button>
+    </div>
+  );
+};

@@ -483,6 +483,7 @@ function transformUseFieldDestructurePatterns(
 
       // 元のObjectPatternから必要な情報を抽出
       let fieldName = "user"; // デフォルト値
+      let fieldNameIsVariable = false;
 
       // fieldInitの引数からフィールド名を取得（存在する場合）
       if (node.init.arguments && node.init.arguments.length > 0) {
@@ -492,8 +493,30 @@ function transformUseFieldDestructurePatterns(
         } else if (firstArg && firstArg.type === "Identifier") {
           // 変数名の場合は、その変数を参照するようにする
           fieldName = firstArg.name;
+          fieldNameIsVariable = true;
         }
       }
+
+      // 元のコードで setTouched が使われているかチェック
+      const hasTouchedProperty =
+        node.id.elements[2]?.type === "ObjectPattern" &&
+        node.id.elements[2].properties &&
+        node.id.elements[2].properties.some(
+          (prop) =>
+            prop.type === "Property" &&
+            prop.key.type === "Identifier" &&
+            prop.key.name === "setTouched",
+        );
+
+      // 関数スコープ内で setTouched が使用されているかチェック
+      const functionScope = j(path).closest(j.Function);
+      const hasSetTouchedCalls =
+        functionScope.size() > 0 &&
+        j(functionScope.get(0).node)
+          .find(j.CallExpression, {
+            callee: { type: "Identifier", name: "setTouched" },
+          })
+          .size() > 0;
 
       // パターンを[field, form]に変更
       path.node.id = j.arrayPattern([fieldId, formId]);
@@ -533,6 +556,11 @@ function transformUseFieldDestructurePatterns(
         },
       );
 
+      // fieldNameが変数かリテラルかで分岐
+      const nameValue = fieldNameIsVariable
+        ? j.identifier(fieldName)
+        : j.literal(fieldName);
+
       const setValueDecl = j.variableDeclaration("const", [
         j.variableDeclarator(
           j.identifier("setValue"),
@@ -542,11 +570,7 @@ function transformUseFieldDestructurePatterns(
               j.memberExpression(formId, j.identifier("update")),
               [
                 j.objectExpression([
-                  j.property(
-                    "init",
-                    j.identifier("name"),
-                    j.literal(fieldName),
-                  ),
+                  j.property("init", j.identifier("name"), nameValue),
                   Object.assign(
                     j.property(
                       "init",
@@ -570,27 +594,29 @@ function transformUseFieldDestructurePatterns(
         ),
       ]);
 
-      // setTouchedの生成
-      const setTouchedDecl = j.variableDeclaration("const", [
-        j.variableDeclarator(
-          j.identifier("setTouched"),
-          j.arrowFunctionExpression(
-            [
-              Object.assign(j.identifier("_"), {
-                typeAnnotation: j.tsTypeAnnotation(j.tsBooleanKeyword()),
-              }),
-              Object.assign(j.identifier("__"), {
-                optional: true,
-                typeAnnotation: j.tsTypeAnnotation(j.tsBooleanKeyword()),
-              }),
-            ],
-            j.blockStatement([]),
-          ),
-        ),
-      ]);
+      // setTouchedの生成（元のコードで定義されている、または使用されている場合のみ）
+      const usesSetTouched = hasTouchedProperty || hasSetTouchedCalls;
+      const setTouchedDecl = usesSetTouched
+        ? j.variableDeclaration("const", [
+            j.variableDeclarator(
+              j.identifier("setTouched"),
+              j.arrowFunctionExpression(
+                [
+                  Object.assign(j.identifier("_"), {
+                    typeAnnotation: j.tsTypeAnnotation(j.tsBooleanKeyword()),
+                  }),
+                  Object.assign(j.identifier("__"), {
+                    optional: true,
+                    typeAnnotation: j.tsTypeAnnotation(j.tsBooleanKeyword()),
+                  }),
+                ],
+                j.blockStatement([]),
+              ),
+            ),
+          ])
+        : null;
 
       // 親ブロックの取得
-      const functionScope = j(path).closest(j.Function);
       if (functionScope.size() > 0) {
         const functionNode = functionScope.get(0).node;
         if (functionNode.body && functionNode.body.type === "BlockStatement") {
@@ -605,14 +631,14 @@ function transformUseFieldDestructurePatterns(
           );
 
           if (currentIdx !== -1) {
+            // 生成する宣言を配列に格納
+            const declarations = [valueDecl, setValueDecl];
+            if (setTouchedDecl) {
+              declarations.push(setTouchedDecl);
+            }
+
             // 現在の変数宣言の直後に新しい変数宣言を挿入
-            statements.splice(
-              currentIdx + 1,
-              0,
-              valueDecl,
-              setValueDecl,
-              setTouchedDecl,
-            );
+            statements.splice(currentIdx + 1, 0, ...declarations);
           }
         }
       }
