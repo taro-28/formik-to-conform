@@ -965,17 +965,29 @@ export async function convert(code: string): Promise<string> {
   const hasValidationSchema = code.includes("validationSchema");
 
   /* ------------------------------ import 変換 ------------------------------ */
-  // Check if file contains useField from formik
+  // Find all imports from formik to identify what needs to be replaced
   const formikImports = root.find(j.ImportDeclaration, {
     source: { value: "formik" },
   });
 
+  // Track what's being imported from formik
   const hasUseField =
     formikImports
       .find(j.ImportSpecifier, { imported: { name: "useField" } })
       .size() > 0;
 
-  // Check if file contains Formik component
+  // Check specifically for renamed imports like { useField as renamedUseField }
+  const renamedImports = new Map<string, string>();
+  for (const path of formikImports.find(j.ImportSpecifier).paths()) {
+    if (
+      path.node.imported?.name &&
+      path.node.local?.name !== path.node.imported.name
+    ) {
+      renamedImports.set(path.node.imported.name, path.node.local?.name);
+    }
+  }
+
+  // Track other formik imports that will need to be replaced
   const hasFormik = root.findJSXElements("Formik").size() > 0;
 
   // Transform useFormikContext calls to useFormMetadata
@@ -983,19 +995,30 @@ export async function convert(code: string): Promise<string> {
     transformFormikContextUsage(j, root);
   }
 
-  // Remove Formik imports
-  root
-    .find(j.ImportDeclaration, {
-      source: { value: "formik" },
-    })
-    .remove();
+  // Keep track of imports we'll add to @conform-to/react
+  const conformImports = new Set<string>();
 
-  // Add necessary imports
+  // Add necessary imports to the tracking set
+  if (hasUseField) conformImports.add("useField");
+  if (hasUseFormikContext) {
+    conformImports.add("getInputProps");
+    conformImports.add("useFormMetadata");
+  } else if (hasFormik || hasUseField) {
+    conformImports.add("getInputProps");
+  }
+  if (hasFormik) conformImports.add("useForm");
+
+  // Remove Formik imports
+  formikImports.remove();
+
+  // Add necessary conform imports
   addConformImports(j, root, {
     hasUseFormikContext,
     hasFormik,
     hasUseField,
     hasValidationSchema,
+    conformImports,
+    renamedImports,
   });
 
   /* ------------------ Transform useField in components ------------------ */
@@ -1016,16 +1039,164 @@ export async function convert(code: string): Promise<string> {
   /* ------------------------------ 出力 ------------------------------ */
   const output = await formatOutput(root);
 
+  // Clean up any leftover duplicate imports
+  const cleanedOutput = cleanupDuplicateImports(output);
+
   // テスト固有の修正は最小限にとどめる
   if (hasValidationSchema) {
-    return fixValidationSchemaFormatting(output);
+    return fixValidationSchemaFormatting(cleanedOutput);
   }
 
   // Remove extra blank lines between useFormMetadata destructure and setFieldValue
-  return output.replace(
+  return cleanedOutput.replace(
     /(const \{[^}]+\} = useFormMetadata<[^>]+>\([^)]*\);?)\n{2,}/g,
     "$1\n",
   );
+}
+
+/**
+ * Clean up duplicate imports in the final output
+ */
+function cleanupDuplicateImports(code: string): string {
+  // This is a simple post-processing step to handle edge cases
+  // that might be difficult to catch with AST transformations
+  return (
+    code
+      // Remove duplicate imports of the same identifier from different sources
+      .replace(/import\s+\{\s*([^}]+)\s*\}\s+from\s+"formik"[;\n]/g, "")
+      // Fix cases with duplicate imports from @conform-to/react
+      .replace(
+        /import\s+\{\s*([^}]+),\s*useField\s*\}\s+from\s+"@conform-to\/react";\s*import\s+\{\s*useField\s*\}\s+from\s+"@conform-to\/react";/g,
+        'import { $1, useField } from "@conform-to/react";',
+      )
+      // Fix other possible duplicate patterns
+      .replace(
+        /import\s+\{\s*([^}]+),\s*([^,}]+)\s*\}\s+from\s+"@conform-to\/react";\s*import\s+\{\s*\2\s*\}\s+from\s+"@conform-to\/react";/g,
+        'import { $1, $2 } from "@conform-to/react";',
+      )
+  );
+}
+
+/**
+ * 必要なインポートを追加
+ */
+function addConformImports(
+  j: JSCodeshift,
+  root: ReturnType<JSCodeshift>,
+  {
+    hasUseFormikContext,
+    hasFormik,
+    hasUseField,
+    hasValidationSchema,
+    conformImports,
+    renamedImports,
+  }: {
+    hasUseFormikContext: boolean;
+    hasFormik: boolean;
+    hasUseField: boolean;
+    hasValidationSchema: boolean;
+    conformImports: Set<string>;
+    renamedImports: Map<string, string>;
+  },
+) {
+  // Check if we already have an import from @conform-to/react
+  const existingConformImport = root.find(j.ImportDeclaration, {
+    source: { value: "@conform-to/react" },
+  });
+
+  const specifiers: import("jscodeshift").ImportSpecifier[] = [];
+
+  // Create specifiers using the original name or the renamed version
+  for (const name of conformImports) {
+    const localName = renamedImports.get(name) || name;
+    const importSpecifier = j.importSpecifier(j.identifier(name));
+
+    // Handle renamed imports
+    if (localName !== name && typeof localName === "string") {
+      importSpecifier.local = j.identifier(localName);
+    }
+
+    specifiers.push(importSpecifier);
+  }
+
+  // If we already have an import from @conform-to/react, add to it
+  if (existingConformImport.size() > 0) {
+    const existingSpecifiers =
+      existingConformImport.get(0).node.specifiers || [];
+
+    // Add only new specifiers that don't already exist
+    const existingNames = new Set<string>();
+
+    // Safely extract names from existing specifiers
+    for (const s of existingSpecifiers) {
+      if (
+        s.type === "ImportSpecifier" &&
+        s.imported &&
+        s.imported.type === "Identifier"
+      ) {
+        existingNames.add(s.imported.name);
+      }
+    }
+
+    // Filter new specifiers to avoid duplicates
+    const newSpecifiers = specifiers.filter(
+      (specifier) =>
+        specifier.imported &&
+        specifier.imported.type === "Identifier" &&
+        !existingNames.has(specifier.imported.name),
+    );
+
+    // Combine with existing specifiers
+    if (newSpecifiers.length > 0) {
+      existingConformImport.get(0).node.specifiers = [
+        ...existingSpecifiers,
+        ...newSpecifiers,
+      ];
+    }
+  } else {
+    // Add @conform-to/react import at the beginning
+    const reactImports = root.find(j.ImportDeclaration, {
+      source: { value: "react" },
+    });
+
+    const conformImport = j.importDeclaration(
+      specifiers,
+      j.literal("@conform-to/react"),
+    );
+
+    if (reactImports.size() > 0) {
+      reactImports.at(0).insertBefore(conformImport);
+    } else {
+      root.get().node.program.body.unshift(conformImport);
+    }
+  }
+
+  // Add @conform-to/yup import if necessary
+  if (hasValidationSchema) {
+    // Check if we already have an import from @conform-to/yup
+    const existingYupConformImport = root.find(j.ImportDeclaration, {
+      source: { value: "@conform-to/yup" },
+    });
+
+    if (existingYupConformImport.size() === 0) {
+      // Find the yup import
+      const yupImport = root.find(j.ImportDeclaration, {
+        source: { value: "yup" },
+      });
+
+      if (yupImport.size() > 0) {
+        // Add parseWithYup import after yup
+        yupImport
+          .at(0)
+          .insertAfter(
+            j.importDeclaration(
+              [j.importSpecifier(j.identifier("parseWithYup"))],
+              j.literal("@conform-to/yup"),
+            ),
+          );
+      }
+    }
+  }
 }
 
 /**
@@ -1273,81 +1444,6 @@ function createFormHelperDeclarations(
   }
 
   return insertDecls;
-}
-
-/**
- * 必要なインポートを追加
- */
-function addConformImports(
-  j: JSCodeshift,
-  root: ReturnType<JSCodeshift>,
-  {
-    hasUseFormikContext,
-    hasFormik,
-    hasUseField,
-    hasValidationSchema,
-  }: {
-    hasUseFormikContext: boolean;
-    hasFormik: boolean;
-    hasUseField: boolean;
-    hasValidationSchema: boolean;
-  },
-) {
-  // Add conform import at the beginning
-  const specifiers: import("jscodeshift").ImportSpecifier[] = [];
-
-  // Add appropriate imports based on what's being used
-  if (hasUseFormikContext) {
-    specifiers.push(j.importSpecifier(j.identifier("getInputProps")));
-    specifiers.push(j.importSpecifier(j.identifier("useFormMetadata")));
-  } else {
-    // Only add getInputProps if not using useFormikContext
-    specifiers.push(j.importSpecifier(j.identifier("getInputProps")));
-  }
-
-  if (hasFormik) {
-    specifiers.push(j.importSpecifier(j.identifier("useForm")));
-  }
-
-  if (hasUseField) {
-    specifiers.push(j.importSpecifier(j.identifier("useField")));
-  }
-
-  // Add @conform-to/react import at the beginning
-  const reactImports = root.find(j.ImportDeclaration, {
-    source: { value: "react" },
-  });
-
-  const conformImport = j.importDeclaration(
-    specifiers,
-    j.literal("@conform-to/react"),
-  );
-
-  if (reactImports.size() > 0) {
-    reactImports.at(0).insertBefore(conformImport);
-  } else {
-    root.get().node.program.body.unshift(conformImport);
-  }
-
-  // Add @conform-to/yup import if necessary
-  if (hasValidationSchema) {
-    // Find the yup import
-    const yupImport = root.find(j.ImportDeclaration, {
-      source: { value: "yup" },
-    });
-
-    if (yupImport.size() > 0) {
-      // Add parseWithYup import after yup
-      yupImport
-        .at(0)
-        .insertAfter(
-          j.importDeclaration(
-            [j.importSpecifier(j.identifier("parseWithYup"))],
-            j.literal("@conform-to/yup"),
-          ),
-        );
-    }
-  }
 }
 
 /**

@@ -1,4 +1,4 @@
-import { getInputProps, useField } from "@conform-to/react";
+import { useField, getInputProps } from "@conform-to/react";
 import { useId } from "react";
 
 export const SampleUseField1 = () => {
