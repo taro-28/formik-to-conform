@@ -1872,7 +1872,10 @@ function transformFormikComponents(
     const validationSchemaAttr = findAttribute(attrs, "validationSchema");
 
     // Type-safe extraction of defaultValueExpr
-    let defaultValueExpr: Expression | null = null;
+    let defaultValueExpr:
+      | recast.types.namedTypes.JSXEmptyExpression
+      | K.ExpressionKind
+      | null = null;
     if (initAttr && initAttr.type === "JSXAttribute" && initAttr.value) {
       if (isJSXExpressionContainer(initAttr.value)) {
         defaultValueExpr = initAttr.value.expression;
@@ -1880,7 +1883,10 @@ function transformFormikComponents(
     }
 
     // Extract validation schema
-    let validationSchemaExpr: Expression | null = null;
+    let validationSchemaExpr:
+      | recast.types.namedTypes.JSXEmptyExpression
+      | K.ExpressionKind
+      | null = null;
     if (
       validationSchemaAttr &&
       validationSchemaAttr.type === "JSXAttribute" &&
@@ -1959,14 +1965,19 @@ function transformFormikComponents(
 function insertUseFormDeclaration(
   j: JSCodeshift,
   path: import("jscodeshift").ASTPath,
-  defaultValueExpr: Expression | null,
-  validationSchemaExpr: Expression | null,
+  defaultValueExpr:
+    | recast.types.namedTypes.JSXEmptyExpression
+    | K.ExpressionKind
+    | null,
+  validationSchemaExpr:
+    | recast.types.namedTypes.JSXEmptyExpression
+    | K.ExpressionKind
+    | null,
 ) {
   const useFormProps = [
     j.property(
       "init",
       j.identifier("defaultValue"),
-      // @ts-ignore: Expression cast issues
       defaultValueExpr &&
         (defaultValueExpr.type === "ObjectExpression" ||
           defaultValueExpr.type === "Identifier")
