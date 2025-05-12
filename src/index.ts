@@ -670,8 +670,7 @@ function transformUseFieldDestructurePatterns(
       // Generate setValue function
       const valueParam = valueType
         ? Object.assign(j.identifier("value"), {
-            // biome-ignore lint/suspicious/noExplicitAny: Suppress error for pragmatic fix
-            typeAnnotation: j.tsTypeAnnotation(valueType as any),
+            typeAnnotation: j.tsTypeAnnotation(valueType),
           })
         : j.identifier("value");
 
