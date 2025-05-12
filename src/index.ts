@@ -1600,10 +1600,29 @@ function transformFormikContextDestructuring(
     );
 
     // Function that contains this variable declarator
-    const funcPath = j(path).closest(j.Function, () => true);
-    if (funcPath.size() === 0) continue;
-
-    const funcNode = funcPath.get(0).node;
+    let funcPath:
+      | import("jscodeshift").ASTPath<
+          | import("jscodeshift").FunctionDeclaration
+          | import("jscodeshift").FunctionExpression
+          | import("jscodeshift").ArrowFunctionExpression
+        >
+      | null = null;
+    const tryFuncDecl = j(path).closest(j.FunctionDeclaration);
+    if (tryFuncDecl.size() > 0) {
+      funcPath = tryFuncDecl.get(0);
+    } else {
+      const tryFuncExpr = j(path).closest(j.FunctionExpression);
+      if (tryFuncExpr.size() > 0) {
+        funcPath = tryFuncExpr.get(0);
+      } else {
+        const tryArrow = j(path).closest(j.ArrowFunctionExpression);
+        if (tryArrow.size() > 0) {
+          funcPath = tryArrow.get(0);
+        }
+      }
+    }
+    if (!funcPath) continue;
+    const funcNode = funcPath.node;
 
     // Analyze how the destructured properties are actually used in the function
     const usageAnalysis = analyzeDestructuredPropsUsage(j, funcNode, propNames);
@@ -1636,7 +1655,10 @@ function transformFormikContextDestructuring(
  */
 function analyzeDestructuredPropsUsage(
   j: JSCodeshift,
-  funcNode: any,
+  funcNode:
+    | import("jscodeshift").FunctionDeclaration
+    | import("jscodeshift").FunctionExpression
+    | import("jscodeshift").ArrowFunctionExpression,
   propNames: string[],
 ) {
   // Find all identifiers in the function body
@@ -1696,7 +1718,7 @@ function analyzeDestructuredPropsUsage(
 /**
  * Find the index of the form declaration in the function body
  */
-function findFormDeclarationIndex(statements: any[]): number {
+function findFormDeclarationIndex(statements: Statement[]): number {
   return statements.findIndex((stmt: Statement) => {
     if (stmt.type !== "VariableDeclaration" || !("declarations" in stmt)) {
       return false;
@@ -2212,7 +2234,7 @@ function transformFieldComponents(
  */
 function transformFieldComponentInForm(
   j: JSCodeshift,
-  path: any,
+  path: import("jscodeshift").ASTPath,
   {
     elementName,
     fieldNameExpr,
@@ -2234,7 +2256,7 @@ function transformFieldComponentInForm(
       )
     : j.memberExpression(
         j.identifier("fields"),
-        j.identifier((fieldNameExpr as any).name || "fieldName"),
+        j.identifier((fieldNameExpr as { name: string }).name || "fieldName"),
         true,
       );
 
@@ -2288,7 +2310,7 @@ function transformFieldComponentInForm(
  */
 function transformFieldComponentWithUseField(
   j: JSCodeshift,
-  path: any,
+  path: import("jscodeshift").ASTPath,
   {
     elementName,
     fieldNameExpr,
@@ -2316,11 +2338,11 @@ function transformFieldComponentWithUseField(
   const fieldVarName = "field";
 
   // Extract field name for the useField call - handle different types
-  let useFieldArg;
+  let useFieldArg: import("jscodeshift").Expression;
   if (isStringLiteral(fieldNameExpr)) {
     useFieldArg = j.stringLiteral(fieldNameExpr.value);
-  } else if ((fieldNameExpr as any).type === "Identifier") {
-    useFieldArg = j.identifier((fieldNameExpr as any).name);
+  } else if ((fieldNameExpr as { type: string }).type === "Identifier") {
+    useFieldArg = j.identifier((fieldNameExpr as { name: string }).name);
   } else {
     // Fallback for other types
     useFieldArg = j.stringLiteral("field");
@@ -2328,7 +2350,7 @@ function transformFieldComponentWithUseField(
 
   // Create the useField call
   const useFieldCall = j.callExpression(j.identifier("useField"), [
-    useFieldArg,
+    useFieldArg as any,
   ]);
 
   // Add generic parameter for name field if needed
@@ -2338,12 +2360,21 @@ function transformFieldComponentWithUseField(
       const typeAnnotatedNode = recast.parse(
         `const [field] = useField<string>("name")`,
         { parser: recastTS },
-      ).program.body[0] as any;
+      ).program.body[0] as import("jscodeshift").VariableDeclaration;
 
       // Extract the useField call with type parameter and manually assign
       // This is a workaround for TypeScript limitations with JSCodeshift
-      const init = typeAnnotatedNode.declarations[0].init;
-      (useFieldCall as any).typeParameters = init.typeParameters;
+      const decl = typeAnnotatedNode.declarations[0];
+      if (
+        decl &&
+        decl.type === "VariableDeclarator" &&
+        decl.init &&
+        decl.init.type === "CallExpression" &&
+        "typeParameters" in decl.init
+      ) {
+        (useFieldCall as typeof decl.init).typeParameters =
+          decl.init.typeParameters;
+      }
     } catch (error) {
       // Fallback if the recast approach fails
       console.error("Failed to add type parameters to useField call", error);
@@ -2376,7 +2407,10 @@ function transformFieldComponentWithUseField(
     if (isJSXExpressionContainer(idAttr.value)) {
       // Keep the original JSX expression container
       inputAttrs.push(
-        j.jsxAttribute(j.jsxIdentifier("id"), idAttr.value as any),
+        j.jsxAttribute(
+          j.jsxIdentifier("id"),
+          idAttr.value as import("jscodeshift").JSXExpressionContainer,
+        ),
       );
     } else if (isStringLiteral(idAttr.value)) {
       // String literal
