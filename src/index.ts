@@ -2309,7 +2309,7 @@ function transformFieldComponentWithUseField(
   let useFieldArg: K.ExpressionKind;
   if (isStringLiteral(fieldNameExpr)) {
     useFieldArg = j.stringLiteral(fieldNameExpr.value);
-  } else if ((fieldNameExpr as { type: string }).type === "Identifier") {
+  } else if (fieldNameExpr.type === "Identifier") {
     useFieldArg = j.identifier((fieldNameExpr as { name: string }).name);
   } else {
     // Fallback for other types
