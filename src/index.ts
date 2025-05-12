@@ -13,7 +13,7 @@ import { format } from "prettier";
 import * as recast from "recast";
 import * as recastTS from "recast/parsers/typescript";
 
-// JSX属性に関する汎用的な型定義
+// JSX attribute-related generic type definitions
 interface AttributeLike {
   type: string;
   name?: JSXIdentifier | JSXNamespacedName;
@@ -23,7 +23,7 @@ interface AttributeLike {
 /* ------------------------------ Type Guards ------------------------------ */
 
 /**
- * 文字列リテラル型であるかをチェックする型ガード
+ * Checks if the value is a string literal
  */
 function isStringLiteral(
   value: unknown,
@@ -37,7 +37,7 @@ function isStringLiteral(
 }
 
 /**
- * 関数式であるかをチェックする型ガード
+ * Checks if the node is a function expression
  */
 function isFunctionExpression(node: unknown): node is {
   type: "ArrowFunctionExpression" | "FunctionExpression";
@@ -54,7 +54,7 @@ function isFunctionExpression(node: unknown): node is {
 }
 
 /**
- * JSX式コンテナであるかをチェックする型ガード
+ * Checks if the value is a JSX expression container
  */
 function isJSXExpressionContainer(value: unknown): value is {
   type: "JSXExpressionContainer";
@@ -73,7 +73,7 @@ function isJSXExpressionContainer(value: unknown): value is {
 }
 
 /**
- * 指定されたノードが識別子かチェックする型ガード
+ * Checks if the node is an identifier
  */
 function isIdentifier(
   node: unknown,
@@ -91,10 +91,10 @@ function isIdentifier(
 /* ------------------------------ Attribute Helpers ------------------------------ */
 
 /**
- * JSX属性から値を安全に取り出す
- * @param attr 属性オブジェクト
- * @param opts オプション（デフォルト値、変換関数）
- * @returns 抽出された値または指定されたデフォルト値
+ * Safely extracts the value from a JSX attribute
+ * @param attr attribute object
+ * @param opts options (default value, conversion function)
+ * @returns extracted value or specified default value
  */
 function extractAttributeValue(
   attr: AttributeLike | null | undefined,
@@ -122,7 +122,7 @@ function extractAttributeValue(
 }
 
 /**
- * JSX属性を名前で検索
+ * Searches for a JSX attribute by name
  */
 function findAttribute(
   attributes:
@@ -137,9 +137,9 @@ function findAttribute(
 }
 
 /**
- * フィールド引数から名前を抽出する
- * @param fieldArg フィールド引数ノード
- * @returns 抽出されたフィールド名、または空文字列
+ * Extracts the field name from a field argument
+ * @param fieldArg field argument node
+ * @returns extracted field name or empty string
  */
 function extractFieldNameFromArg(fieldArg: unknown): string {
   if (!fieldArg) {
@@ -160,11 +160,11 @@ function extractFieldNameFromArg(fieldArg: unknown): string {
 /* ------------------------------ Transformation Functions ------------------------------ */
 
 /**
- * 要素を getInputProps 化する関数（属性値抽出・プロパティ生成を共通化）
- * @param j JSCodeshift インスタンス
- * @param formJSX 対象のJSX要素
- * @param elementSelector 変換する要素のセレクタ（タグ名）
- * @param isField Fieldコンポーネントか通常のinputかを識別するフラグ
+ * Function to transform an element into getInputProps format (common attribute extraction and property generation)
+ * @param j JSCodeshift instance
+ * @param formJSX target JSX element
+ * @param elementSelector selector for the element to transform (tag name)
+ * @param isField flag to identify if it's a Field component or regular input
  */
 function transformToGetInputProps(
   j: JSCodeshift,
@@ -196,7 +196,7 @@ function transformToGetInputProps(
       defaultValue: fieldName || "field",
     }) as string;
 
-    // 共通化: 属性名・デフォルト値・型変換関数のリスト
+    // Common attributes: name, default value, type conversion function
     const ATTRS = [
       {
         name: "type",
@@ -237,7 +237,7 @@ function transformToGetInputProps(
         } else if (typeof value === "object" && "type" in value) {
           propValue = value as import("jscodeshift").Expression;
         } else {
-          continue; // 不正な値はスキップ
+          continue; // Skip invalid values
         }
 
         getInputPropsProperties.push(
@@ -395,7 +395,7 @@ function transformToGetInputProps(
 }
 
 /**
- * カスタムコンポーネント名を属性から抽出
+ * Extracts custom component name from attribute
  */
 function extractCustomComponentName(asAttr: AttributeLike): string | null {
   if (!asAttr.value) {
@@ -423,7 +423,7 @@ function extractCustomComponentName(asAttr: AttributeLike): string | null {
 }
 
 /**
- * Create a JSX input element
+ * Creates a JSX input element
  */
 function createInputElement(
   j: JSCodeshift,
@@ -437,12 +437,11 @@ function createInputElement(
 }
 
 /**
- * Transform inputs that use Formik's useField to Conform's getInputProps
+ * Transforms inputs that use Formik's useField to Conform's getInputProps
  *
- * この関数はDOMのinput要素を処理し、Formikの`{...field}`スプレッド属性を
- * Conformの`{...getInputProps(field, { type: "text" })}`に変換します。
+ * This function processes DOM input elements and converts Formik's `{...field}` spread attributes to Conform's `{...getInputProps(field, { type: "text" })}`.
  *
- * @param j JSCodeshift インスタンス
+ * @param j JSCodeshift instance
  * @param root AST root
  */
 function transformUseFieldInputs(
@@ -489,21 +488,21 @@ function transformUseFieldInputs(
           spreadAttr.argument.callee.type === "Identifier" &&
           spreadAttr.argument.callee.name === "getFieldProps"
         ) {
-          // getFieldProps呼び出しを処理
+          // Process getFieldProps call
           const fieldArg = spreadAttr.argument.arguments[0];
           if (fieldArg) {
-            // 元の実装に基づいた安全なアプローチ
+            // Safe approach based on original implementation
             let fieldsAccessor: import("jscodeshift").MemberExpression;
 
             if (fieldArg.type === "StringLiteral") {
-              // 文字列リテラルの場合
+              // Case for string literal
               fieldsAccessor = j.memberExpression(
                 j.identifier("fields"),
                 j.identifier(fieldArg.value),
                 true,
               );
             } else {
-              // デフォルトフォールバック処理
+              // Default fallback handling
               fieldsAccessor = j.memberExpression(
                 j.identifier("fields"),
                 j.identifier("field"),
@@ -531,7 +530,7 @@ function transformUseFieldInputs(
 }
 
 /**
- * Transform <Form> component from Formik to regular <form> elements
+ * Transforms <Form> component from Formik to regular <form> elements
  */
 function transformFormComponents(
   j: JSCodeshift,
@@ -566,7 +565,7 @@ function transformFormComponents(
 }
 
 /**
- * Replace onSubmit attribute with form.onSubmit
+ * Replaces onSubmit attribute with form.onSubmit
  */
 function updateOnSubmitAttr(j: JSCodeshift, formJSX: JSXElement) {
   const onSubmitAttrs = j(formJSX).find(j.JSXAttribute, {
@@ -591,7 +590,7 @@ function transformUseFieldDestructurePatterns(
   j: JSCodeshift,
   root: ReturnType<JSCodeshift>,
 ) {
-  // 変換前に、全てのawait式をawaitなしに変換するための処理を追加
+  // Add processing to convert all await expressions to non-await form
   removeAwaitFromSetFieldCalls(j, root);
 
   for (const path of root.find(j.VariableDeclarator).paths()) {
@@ -611,23 +610,23 @@ function transformUseFieldDestructurePatterns(
       const fieldId = j.identifier("field");
       const formId = j.identifier("form");
 
-      // 元のObjectPatternから必要な情報を抽出
-      let fieldName = "user"; // デフォルト値
+      // Extract necessary information from the original ObjectPattern
+      let fieldName = "user"; // Default value
       let fieldNameIsVariable = false;
 
-      // fieldInitの引数からフィールド名を取得（存在する場合）
+      // Get field name from the first argument of fieldInit
       if (node.init.arguments && node.init.arguments.length > 0) {
         const firstArg = node.init.arguments[0];
         if (firstArg && firstArg.type === "StringLiteral") {
           fieldName = firstArg.value;
         } else if (firstArg && firstArg.type === "Identifier") {
-          // 変数名の場合は、その変数を参照するようにする
+          // If it's a variable, reference it
           fieldName = firstArg.name;
           fieldNameIsVariable = true;
         }
       }
 
-      // 元のコードで setTouched が使われているかチェック
+      // Check if setTouched is used in the original code
       const hasTouchedProperty =
         node.id.elements[2]?.type === "ObjectPattern" &&
         node.id.elements[2].properties &&
@@ -638,7 +637,7 @@ function transformUseFieldDestructurePatterns(
             prop.key.name === "setTouched",
         );
 
-      // 関数スコープ内で setTouched が使用されているかチェック
+      // Check if setTouched is used within the function scope
       const functionScope = j(path).closest(j.Function);
       const hasSetTouchedCalls =
         functionScope.size() > 0 &&
@@ -648,10 +647,10 @@ function transformUseFieldDestructurePatterns(
           })
           .size() > 0;
 
-      // パターンを[field, form]に変更
+      // Change pattern to [field, form]
       path.node.id = j.arrayPattern([fieldId, formId]);
 
-      // 変換後、必要な変数宣言を作成
+      // Create variable declarations for value and setValue
       const valueDecl = j.variableDeclaration("const", [
         j.variableDeclarator(
           j.identifier("value"),
@@ -659,9 +658,9 @@ function transformUseFieldDestructurePatterns(
         ),
       ]);
 
-      // 型引数を取得（TSのみ対応）
+      // Get value type (only for TS)
       let valueType: TSType | null = null;
-      // biome-ignore lint/suspicious/noExplicitAny: 型パラメータ取得のため any を許容
+      // biome-ignore lint/suspicious/noExplicitAny: Allow any type parameter for pragmatic fix
       const callExpr = node.init as unknown as { typeParameters?: any };
       if (
         callExpr.typeParameters &&
@@ -671,10 +670,10 @@ function transformUseFieldDestructurePatterns(
         valueType = callExpr.typeParameters.params[0];
       }
 
-      // setValueの生成
+      // Generate setValue function
       const valueParam = valueType
         ? Object.assign(j.identifier("value"), {
-            // biome-ignore lint/suspicious/noExplicitAny: Suppressing error for pragmatic fix
+            // biome-ignore lint/suspicious/noExplicitAny: Suppress error for pragmatic fix
             typeAnnotation: j.tsTypeAnnotation(valueType as any),
           })
         : j.identifier("value");
@@ -687,7 +686,7 @@ function transformUseFieldDestructurePatterns(
         },
       );
 
-      // fieldNameが変数かリテラルかで分岐
+      // Check if fieldName is a variable or a literal
       const nameValue = fieldNameIsVariable
         ? j.identifier(fieldName)
         : j.literal(fieldName);
@@ -725,7 +724,7 @@ function transformUseFieldDestructurePatterns(
         ),
       ]);
 
-      // setTouchedの生成（元のコードで定義されている、または使用されている場合のみ）
+      // Generate setTouched declaration (only if used in original code or within function scope)
       const usesSetTouched = hasTouchedProperty || hasSetTouchedCalls;
       const setTouchedDecl = usesSetTouched
         ? j.variableDeclaration("const", [
@@ -747,13 +746,13 @@ function transformUseFieldDestructurePatterns(
           ])
         : null;
 
-      // 親ブロックの取得
+      // Get parent function
       if (functionScope.size() > 0) {
         const functionNode = functionScope.get(0).node;
         if (functionNode.body && functionNode.body.type === "BlockStatement") {
           const statements = functionNode.body.body;
 
-          // 現在の変数宣言のインデックスを探す
+          // Find index of current variable declaration
           const currentVarDecl = j(path)
             .closest(j.VariableDeclaration)
             .get(0).node;
@@ -762,13 +761,13 @@ function transformUseFieldDestructurePatterns(
           );
 
           if (currentIdx !== -1) {
-            // 生成する宣言を配列に格納
+            // Add new declarations to the array
             const declarations = [valueDecl, setValueDecl];
             if (setTouchedDecl) {
               declarations.push(setTouchedDecl);
             }
 
-            // 現在の変数宣言の直後に新しい変数宣言を挿入
+            // Insert new declarations after current declaration
             statements.splice(currentIdx + 1, 0, ...declarations);
           }
         }
@@ -778,23 +777,23 @@ function transformUseFieldDestructurePatterns(
 }
 
 /**
- * Remove 'await' from calls to setFieldValue, setFieldTouched, setValue and setTouched
+ * Removes 'await' from calls to setFieldValue, setFieldTouched, setValue and setTouched
  */
 function removeAwaitFromSetFieldCalls(
   j: JSCodeshift,
   root: ReturnType<JSCodeshift>,
 ) {
-  // すべての関数内のawait式を見つける
+  // Find all await expressions in functions
   const functions = root.find(j.Function).paths();
   for (const path of functions) {
     if (path.node.body && path.node.body.type === "BlockStatement") {
-      // 関数本体内のawait式を探す
+      // Find await expressions within the function body
       const awaitExpressions = j(path.node.body)
         .find(j.AwaitExpression)
         .paths();
       for (const awaitPath of awaitExpressions) {
         const arg = awaitPath.node.argument;
-        // 対象となる関数呼び出しがある場合は置換
+        // If there's a function call as an argument, replace it with the original call
         if (
           arg &&
           arg.type === "CallExpression" &&
@@ -815,22 +814,22 @@ function removeAwaitFromSetFieldCalls(
 }
 
 /**
- * Transform variable declarations that use getFieldProps destructuring pattern
+ * Transforms variable declarations that use getFieldProps destructuring pattern
  */
 function transformGetFieldPropsDestructuring(
   j: JSCodeshift,
   root: ReturnType<JSCodeshift>,
 ) {
-  // パターン1: 変数宣言での構造分解代入 (const { value } = getFieldProps(...))
+  // Pattern 1: Destructuring assignment in variable declaration (const { value } = getFieldProps(...))
   transformGetFieldPropsObjectPattern(j, root);
 
-  // パターン2: JSXでのgetFieldPropsの使用 ({...getFieldProps(...)})
+  // Pattern 2: Using getFieldProps in JSX ({...getFieldProps(...)})
   transformJSXGetFieldProps(j, root);
 }
 
 /**
- * 変数宣言での構造分解代入パターンを変換
- * 例: const { value } = getFieldProps(fieldName)
+ * Converts destructuring assignment in variable declaration to getFieldProps
+ * Example: const { value } = getFieldProps(fieldName)
  */
 function transformGetFieldPropsObjectPattern(
   j: JSCodeshift,
