@@ -254,12 +254,12 @@ function transformToGetInputProps(
       const funcNode = functionComp.get(0).node;
       if (funcNode?.body?.type === "BlockStatement") {
         // Get field name
-        let fieldNameExpr: K.ExpressionKind | K.SpreadElementKind = j.literal(
-          fieldName ?? "field",
-        );
-        if (nameAttr?.value && isJSXExpressionContainer(nameAttr.value)) {
-          fieldNameExpr = nameAttr.value.expression as K.ExpressionKind;
-        }
+        const fieldNameExpr = (() => {
+          if (nameAttr?.value && isJSXExpressionContainer(nameAttr.value)) {
+            return nameAttr.value.expression as K.ExpressionKind;
+          }
+          return j.literal(fieldName ?? "field");
+        })();
 
         // Create useField declaration
         const fieldVarName = "field";
@@ -477,23 +477,23 @@ function transformUseFieldInputs(
           const fieldArg = spreadAttr.argument.arguments[0];
           if (fieldArg) {
             // Safe approach based on original implementation
-            let fieldsAccessor: import("jscodeshift").MemberExpression;
+            const fieldsAccessor = (() => {
+              if (fieldArg.type === "StringLiteral") {
+                // Case for string literal
+                return j.memberExpression(
+                  j.identifier("fields"),
+                  j.identifier(fieldArg.value),
+                  true,
+                );
+              }
 
-            if (fieldArg.type === "StringLiteral") {
-              // Case for string literal
-              fieldsAccessor = j.memberExpression(
-                j.identifier("fields"),
-                j.identifier(fieldArg.value),
-                true,
-              );
-            } else {
               // Default fallback handling
-              fieldsAccessor = j.memberExpression(
+              return j.memberExpression(
                 j.identifier("fields"),
                 j.identifier("field"),
                 true,
               );
-            }
+            })();
 
             const getInputPropsSpread = j.jsxSpreadAttribute(
               createCallExpression(j, "getInputProps", [
@@ -1516,22 +1516,22 @@ function transformGetFieldPropsPropertyAccess(
     }
 
     // Create fields accessor
-    let fieldsAccessor: import("jscodeshift").MemberExpression;
+    const fieldsAccessor = (() => {
+      if (
+        fieldArg.type === "Identifier" ||
+        fieldArg.type === "StringLiteral" ||
+        fieldArg.type === "NumericLiteral"
+      ) {
+        return createBracketFieldAccessor(j, fieldArg);
+      }
 
-    if (
-      fieldArg.type === "Identifier" ||
-      fieldArg.type === "StringLiteral" ||
-      fieldArg.type === "NumericLiteral"
-    ) {
-      fieldsAccessor = createBracketFieldAccessor(j, fieldArg);
-    } else {
       // Fallback for other expression types
-      fieldsAccessor = j.memberExpression(
+      return j.memberExpression(
         j.identifier("fields"),
         j.stringLiteral(fieldName),
         true,
       );
-    }
+    })();
 
     // Create getInputProps call
     const getInputPropsCall = createCallExpression(j, "getInputProps", [
@@ -2077,22 +2077,18 @@ function transformFieldAccessPatterns(
 
     // Create getInputProps call with fields[fieldArg]
     // JSXIdentifier | Identifier | Literal のいずれかの型を期待
-    let propertyNode:
-      | import("jscodeshift").Identifier
-      | import("jscodeshift").StringLiteral
-      | import("jscodeshift").NumericLiteral
-      | import("jscodeshift").Literal;
-
     if (
-      fieldArg.type === "Identifier" ||
-      fieldArg.type === "StringLiteral" ||
-      fieldArg.type === "NumericLiteral"
+      !(
+        fieldArg.type === "Identifier" ||
+        fieldArg.type === "StringLiteral" ||
+        fieldArg.type === "NumericLiteral"
+      )
     ) {
-      propertyNode = fieldArg;
-    } else {
       // 型が不明な場合はスキップ
       continue;
     }
+
+    const propertyNode = fieldArg;
 
     const fieldsAccessExpr = createBracketFieldAccessor(j, propertyNode);
 
@@ -2167,23 +2163,27 @@ function transformFieldComponents(
     if (!nameAttr) continue; // Skip Fields without name attribute
 
     // Extract field name
-    let fieldNameExpr: Expression | { type: "Identifier"; name: string };
-    let isNameField = false;
+    const { fieldNameExpr, isNameField } = (() => {
+      let isNameField = false;
+      let fieldNameExpr: Expression | { type: "Identifier"; name: string };
 
-    if (nameAttr.value && isJSXExpressionContainer(nameAttr.value)) {
-      fieldNameExpr = nameAttr.value.expression;
-      if (isIdentifier(fieldNameExpr) && fieldNameExpr.name === "name") {
-        isNameField = true;
+      if (nameAttr.value && isJSXExpressionContainer(nameAttr.value)) {
+        fieldNameExpr = nameAttr.value.expression;
+        if (isIdentifier(fieldNameExpr) && fieldNameExpr.name === "name") {
+          isNameField = true;
+        }
+      } else if (isStringLiteral(nameAttr.value)) {
+        fieldNameExpr = j.stringLiteral(nameAttr.value.value);
+        if (nameAttr.value.value === "name") {
+          isNameField = true;
+        }
+      } else {
+        // Default for edge cases
+        fieldNameExpr = j.stringLiteral("field");
       }
-    } else if (isStringLiteral(nameAttr.value)) {
-      fieldNameExpr = j.stringLiteral(nameAttr.value.value);
-      if (nameAttr.value.value === "name") {
-        isNameField = true;
-      }
-    } else {
-      // Default for edge cases
-      fieldNameExpr = j.stringLiteral("field");
-    }
+
+      return { fieldNameExpr, isNameField };
+    })();
 
     // Extract input type
     const typeValue =
@@ -2192,13 +2192,15 @@ function transformFieldComponents(
         : "text";
 
     // Determine the component name - default to input unless 'as' prop is specified
-    let elementName = "input";
-    if (asAttr?.value) {
-      const customCompName = extractCustomComponentName(asAttr);
-      if (customCompName) {
-        elementName = customCompName;
+    const elementName = (() => {
+      if (asAttr?.value) {
+        const customCompName = extractCustomComponentName(asAttr);
+        if (customCompName) {
+          return customCompName;
+        }
       }
-    }
+      return "input";
+    })();
 
     if (skipUseField) {
       // Form context version - use fields directly
@@ -2317,15 +2319,18 @@ function transformFieldComponentWithUseField(
   const fieldVarName = "field";
 
   // Extract field name for the useField call - handle different types
-  let useFieldArg: K.ExpressionKind;
-  if (isStringLiteral(fieldNameExpr)) {
-    useFieldArg = j.stringLiteral(fieldNameExpr.value);
-  } else if (fieldNameExpr.type === "Identifier") {
-    useFieldArg = j.identifier((fieldNameExpr as { name: string }).name);
-  } else {
+  const useFieldArg = (() => {
+    if (isStringLiteral(fieldNameExpr)) {
+      return j.stringLiteral(fieldNameExpr.value);
+    }
+
+    if (fieldNameExpr.type === "Identifier") {
+      return j.identifier((fieldNameExpr as { name: string }).name);
+    }
+
     // Fallback for other types
-    useFieldArg = j.stringLiteral("field");
-  }
+    return j.stringLiteral("field");
+  })();
 
   // Create the useField call
   const useFieldCall = createCallExpression(j, "useField", [useFieldArg]);
