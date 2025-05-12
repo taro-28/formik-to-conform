@@ -48,10 +48,9 @@ function isFunctionExpression(
 /**
  * Checks if the value is a JSX expression container
  */
-function isJSXExpressionContainer(value: unknown): value is {
-  type: "JSXExpressionContainer";
-  expression: { type: string } & Expression;
-} {
+function isJSXExpressionContainer(
+  value: JSXAttribute["value"],
+): value is recast.types.namedTypes.JSXExpressionContainer {
   return (
     value !== null &&
     typeof value === "object" &&
