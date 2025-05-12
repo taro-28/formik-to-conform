@@ -1130,15 +1130,14 @@ function fixValidationSchemaFormatting(output: string): string {
 export async function convert(code: string): Promise<string> {
   // Check if the code uses Formik
   const hasFormikImport = code.includes('from "formik"');
-  const hasUseFormikContext = code.includes("useFormikContext");
 
   // If code doesn't use Formik at all, return it unchanged
-  if (!(hasFormikImport || hasUseFormikContext)) {
+  if (!hasFormikImport) {
     return code;
   }
 
   // TSX 用パーサで jscodeshift API を取得
-  const j: JSCodeshift = jscodeshift.withParser("tsx");
+  const j = jscodeshift.withParser("tsx");
   const root = j(code);
 
   // Check if the code includes "validationSchema"
@@ -1175,6 +1174,7 @@ export async function convert(code: string): Promise<string> {
   const hasFormik = root.findJSXElements("Formik").size() > 0;
   const hasFieldComponent = root.findJSXElements("Field").size() > 0;
 
+  const hasUseFormikContext = code.includes("useFormikContext");
   // Transform useFormikContext calls to useFormMetadata
   if (hasUseFormikContext) {
     transformFormikContextUsage(j, root);

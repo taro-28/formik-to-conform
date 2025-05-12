@@ -24,6 +24,9 @@
         "noConsole": "off",
         "noConsoleLog": "off",
         "noReactSpecificProps": "off"
+      },
+      "complexity": {
+        "noExcessiveCognitiveComplexity": "off"
       }
     },
     "ignore": ["src/tests/*.conform.tsx"]
