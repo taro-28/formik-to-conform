@@ -479,7 +479,7 @@ function transformUseFieldInputs(
         ) {
           // Create the getInputProps expression
           const getInputPropsSpread = j.jsxSpreadAttribute(
-            j.callExpression(j.identifier("getInputProps"), [
+            createCallExpression(j, "getInputProps", [
               j.identifier("field"),
               j.objectExpression([
                 j.property("init", j.identifier("type"), j.literal("text")),
@@ -521,7 +521,7 @@ function transformUseFieldInputs(
             }
 
             const getInputPropsSpread = j.jsxSpreadAttribute(
-              j.callExpression(j.identifier("getInputProps"), [
+              createCallExpression(j, "getInputProps", [
                 fieldsAccessor,
                 j.objectExpression([]),
               ]),
@@ -1043,7 +1043,7 @@ function transformJSXGetFieldProps(
     }
 
     // Replace with getInputProps
-    path.node.argument = j.callExpression(j.identifier("getInputProps"), [
+    path.node.argument = createCallExpression(j, "getInputProps", [
       fieldAccessor,
       j.objectExpression([
         j.property("init", j.identifier("type"), j.literal(typeValue)),
@@ -1559,7 +1559,7 @@ function transformGetFieldPropsPropertyAccess(
     }
 
     // Create getInputProps call
-    const getInputPropsCall = j.callExpression(j.identifier("getInputProps"), [
+    const getInputPropsCall = createCallExpression(j, "getInputProps", [
       fieldsAccessor,
       j.objectExpression([
         j.property("init", j.identifier("type"), j.literal("text")),
@@ -2108,7 +2108,7 @@ function transformFieldAccessPatterns(
 
     const fieldsAccessExpr = createBracketFieldAccessor(j, propertyNode);
 
-    const getInputPropsCall = j.callExpression(j.identifier("getInputProps"), [
+    const getInputPropsCall = createCallExpression(j, "getInputProps", [
       fieldsAccessExpr,
       j.objectExpression([
         j.property("init", j.identifier("type"), j.literal("text")),
@@ -2466,15 +2466,6 @@ function isFormContext(j: JSCodeshift, root: ReturnType<JSCodeshift>): boolean {
 }
 
 /**
- * 型安全な useField 呼び出しを生成
- * @param j JSCodeshift
- * @param arg useFieldの引数（Expression型）
- */
-function createUseFieldCall(j: JSCodeshift, arg: Expression): any {
-  return j.callExpression(j.identifier("useField"), [arg as any]);
-}
-
-/**
  * 型安全な id 属性を生成
  * @param j JSCodeshift
  * @param idValue JSXAttributeのvalue
@@ -2509,8 +2500,10 @@ function createGetInputPropsCall(
   fieldExpr: Expression,
   typeValue: string,
   extraProps: import("jscodeshift").Property[] = [],
-): any {
+): import("jscodeshift").Expression {
+  // biome-ignore lint/suspicious/noExplicitAny: jscodeshift AST interop
   return j.callExpression(j.identifier("getInputProps"), [
+    // biome-ignore lint/suspicious/noExplicitAny: jscodeshift AST interop
     fieldExpr as any,
     j.objectExpression([
       j.property("init", j.identifier("type"), j.literal(typeValue)),
@@ -2544,29 +2537,12 @@ function createCallExpression(
   j: JSCodeshift,
   callee: string,
   args: Expression[],
-): Expression {
+): import("jscodeshift").Expression {
+  // biome-ignore lint/suspicious/noExplicitAny: jscodeshift AST interop
   return j.callExpression(
     j.identifier(callee),
     args.map((a) => a as any),
   );
-}
-
-/**
- * Add a JSX attribute to an attribute list if value is defined
- * @param attrs Attribute list to mutate
- * @param j JSCodeshift instance
- * @param name Attribute name
- * @param value Attribute value (string literal or expression container)
- */
-function pushJSXAttribute(
-  attrs: (JSXAttribute | JSXSpreadAttribute)[],
-  j: JSCodeshift,
-  name: string,
-  value: JSXAttribute["value"] | undefined,
-) {
-  if (value !== undefined) {
-    attrs.push(j.jsxAttribute(j.jsxIdentifier(name), value));
-  }
 }
 
 /**
