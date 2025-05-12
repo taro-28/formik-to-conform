@@ -13,6 +13,7 @@ import { format } from "prettier";
 import * as recast from "recast";
 import * as recastTS from "recast/parsers/typescript";
 import type * as K from "ast-types/lib/gen/kinds";
+import type { ExpressionKind } from "ast-types/lib/gen/kinds";
 // JSX attribute-related generic type definitions
 interface AttributeLike {
   type: string;
@@ -268,7 +269,15 @@ function transformToGetInputProps(
         // Get field name
         let fieldNameExpr = j.literal(fieldName ?? "field");
         if (nameAttr?.value && isJSXExpressionContainer(nameAttr.value)) {
-          fieldNameExpr = nameAttr.value.expression;
+          // 型アサーションでvalueプロパティを補う
+          const expr = nameAttr.value.expression as import(
+            "jscodeshift",
+          ).Literal;
+          if ("value" in expr) {
+            fieldNameExpr = expr;
+          } else {
+            fieldNameExpr = j.literal(fieldName ?? "field");
+          }
         }
 
         // Create useField declaration
@@ -2263,7 +2272,20 @@ function transformFieldComponentInForm(
   // Add id attribute if present - preserve original id value whenever possible
   const idValue = getJSXAttributeValue(idAttr);
   if (idValue) {
-    newAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idValue));
+    // 型ガードで型を分岐
+    if (isStringLiteral(idValue)) {
+      newAttrs.push(
+        j.jsxAttribute(j.jsxIdentifier("id"), j.stringLiteral(idValue.value)),
+      );
+    } else if (isJSXExpressionContainer(idValue)) {
+      // expressionの型を明示
+      newAttrs.push(
+        j.jsxAttribute(
+          j.jsxIdentifier("id"),
+          j.jsxExpressionContainer(idValue.expression as ExpressionKind),
+        ),
+      );
+    }
   }
 
   // Create the new element
@@ -2371,7 +2393,18 @@ function transformFieldComponentWithUseField(
   // Add id attribute if present - preserve original id value whenever possible
   const idValue = getJSXAttributeValue(idAttr);
   if (idValue) {
-    inputAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idValue));
+    if (isStringLiteral(idValue)) {
+      inputAttrs.push(
+        j.jsxAttribute(j.jsxIdentifier("id"), j.stringLiteral(idValue.value)),
+      );
+    } else if (isJSXExpressionContainer(idValue)) {
+      inputAttrs.push(
+        j.jsxAttribute(
+          j.jsxIdentifier("id"),
+          j.jsxExpressionContainer(idValue.expression as ExpressionKind),
+        ),
+      );
+    }
   }
 
   // Create the new element
