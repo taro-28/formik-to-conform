@@ -30,10 +30,11 @@ function isStringLiteral(
 /**
  * Checks if the node is a function expression
  */
-function isFunctionExpression(node: unknown): node is {
-  type: "ArrowFunctionExpression" | "FunctionExpression";
-  body: unknown;
-} {
+function isFunctionExpression(
+  node: K.ExpressionKind | recast.types.namedTypes.JSXEmptyExpression,
+): node is
+  | recast.types.namedTypes.FunctionExpression
+  | recast.types.namedTypes.ArrowFunctionExpression {
   return (
     node !== null &&
     typeof node === "object" &&
