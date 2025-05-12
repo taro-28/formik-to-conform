@@ -2,6 +2,8 @@ import type * as K from "ast-types/lib/gen/kinds";
 import jscodeshift, {
   type JSCodeshift,
   type JSXElement,
+  type JSXIdentifier,
+  type JSXNamespacedName,
   type Expression,
   type JSXAttribute,
   type JSXSpreadAttribute,
@@ -12,6 +14,11 @@ import { format } from "prettier";
 import * as recast from "recast";
 import * as recastTS from "recast/parsers/typescript";
 // JSX attribute-related generic type definitions
+interface AttributeLike {
+  type: string;
+  name?: JSXIdentifier | JSXNamespacedName;
+  value?: unknown;
+}
 
 /* ------------------------------ Type Guards ------------------------------ */
 
@@ -90,7 +97,7 @@ function isIdentifier(
  * @returns extracted value or specified default value
  */
 function extractAttributeValue(
-  attr: JSXAttribute | null | undefined,
+  attr: AttributeLike | null | undefined,
   opts: {
     defaultValue?: unknown;
     toValue?: (value: unknown) => unknown;
@@ -348,7 +355,6 @@ function transformToGetInputProps(
         if (asValue) {
           const customComponentName = extractCustomComponentName({
             type: "JSXAttribute",
-            name: j.jsxIdentifier(asValue),
             value: j.stringLiteral(asValue),
           });
           if (customComponentName) {
@@ -396,7 +402,7 @@ function transformToGetInputProps(
 /**
  * Extracts custom component name from attribute
  */
-function extractCustomComponentName(asAttr: JSXAttribute): string | null {
+function extractCustomComponentName(asAttr: AttributeLike): string | null {
   if (!asAttr.value) {
     return null;
   }
@@ -2225,7 +2231,7 @@ function transformFieldComponentInForm(
     elementName: string;
     fieldNameExpr: Expression | { type: "Identifier"; name: string };
     typeValue: string;
-    idAttr: JSXAttribute | null | undefined;
+    idAttr: AttributeLike | null | undefined;
   },
 ) {
   // Create fields accessor for the given field
@@ -2290,7 +2296,7 @@ function transformFieldComponentWithUseField(
     fieldNameExpr: Expression | { type: "Identifier"; name: string };
     isNameField: boolean;
     typeValue: string;
-    idAttr: JSXAttribute | null | undefined;
+    idAttr: AttributeLike | null | undefined;
   },
 ) {
   // Get parent function component
@@ -2506,7 +2512,7 @@ function createGetInputPropsCall<
  * @returns The attribute value if it is a string literal or expression container, otherwise undefined
  */
 function getJSXAttributeValue(
-  attr: JSXAttribute | null | undefined,
+  attr: AttributeLike | null | undefined,
 ):
   | import("jscodeshift").JSXExpressionContainer
   | { type: "StringLiteral"; value: string }
