@@ -266,9 +266,7 @@ function transformToGetInputProps(
         funcNode.body.type === "BlockStatement"
       ) {
         // Get field name
-        let fieldNameExpr: import("jscodeshift").Expression = j.literal(
-          fieldName ?? "field",
-        );
+        let fieldNameExpr = j.literal(fieldName ?? "field");
         if (nameAttr?.value && isJSXExpressionContainer(nameAttr.value)) {
           fieldNameExpr = nameAttr.value.expression;
         }
@@ -278,7 +276,7 @@ function transformToGetInputProps(
         const useFieldDecl = j.variableDeclaration("const", [
           j.variableDeclarator(
             j.arrayPattern([j.identifier(fieldVarName)]),
-            createCallExpression(j, "useField", [fieldNameExpr as Expression]),
+            createCallExpression(j, "useField", [fieldNameExpr]),
           ),
         ]);
 
@@ -306,7 +304,7 @@ function transformToGetInputProps(
                 j,
                 j.stringLiteral(idValue ?? fieldName ?? "field"),
               ),
-            ] as (JSXAttribute | JSXSpreadAttribute)[],
+            ],
             true,
           ),
           null,
@@ -1713,8 +1711,7 @@ function findFormDeclarationIndex(statements: Statement[]): number {
     if (stmt.type !== "VariableDeclaration" || !("declarations" in stmt)) {
       return false;
     }
-    const decls = (stmt as import("jscodeshift").VariableDeclaration)
-      .declarations;
+    const decls = stmt.declarations;
     if (!Array.isArray(decls) || decls.length === 0) {
       return false;
     }
@@ -2309,7 +2306,7 @@ function transformFieldComponentWithUseField(
   const fieldVarName = "field";
 
   // Extract field name for the useField call - handle different types
-  let useFieldArg: import("jscodeshift").Expression;
+  let useFieldArg: K.ExpressionKind;
   if (isStringLiteral(fieldNameExpr)) {
     useFieldArg = j.stringLiteral(fieldNameExpr.value);
   } else if ((fieldNameExpr as { type: string }).type === "Identifier") {
@@ -2329,7 +2326,7 @@ function transformFieldComponentWithUseField(
       const typeAnnotatedNode = recast.parse(
         `const [field] = useField<string>("name")`,
         { parser: recastTS },
-      ).program.body[0] as import("jscodeshift").VariableDeclaration;
+      ).program.body[0];
 
       // Extract the useField call with type parameter and manually assign
       // This is a workaround for TypeScript limitations with JSCodeshift
@@ -2457,7 +2454,7 @@ function isFormContext(j: JSCodeshift, root: ReturnType<JSCodeshift>): boolean {
 function createIdAttribute(
   j: JSCodeshift,
   idValue: JSXAttribute["value"] | undefined,
-): JSXAttribute {
+) {
   if (idValue) {
     if (isJSXExpressionContainer(idValue)) {
       return j.jsxAttribute(j.jsxIdentifier("id"), idValue);
@@ -2518,7 +2515,7 @@ function getJSXAttributeValue(attr: AttributeLike | null | undefined) {
 function createCallExpression(
   j: JSCodeshift,
   callee: string,
-  args: Expression[],
+  args: (K.ExpressionKind | K.SpreadElementKind)[],
 ) {
   return j.callExpression(j.identifier(callee), args);
 }
