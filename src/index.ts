@@ -1049,7 +1049,7 @@ function createFieldAccessor(
   j: JSCodeshift,
   fieldArg: import("jscodeshift").Expression | unknown,
   fieldName: string,
-): import("jscodeshift").MemberExpression {
+) {
   const isIdent =
     fieldArg !== null &&
     typeof fieldArg === "object" &&
@@ -1080,7 +1080,7 @@ function createBracketFieldAccessor(
     | import("jscodeshift").Identifier
     | import("jscodeshift").StringLiteral
     | import("jscodeshift").NumericLiteral,
-): import("jscodeshift").MemberExpression {
+) {
   return j.memberExpression(j.identifier("fields"), fieldPropertyExpr, true);
 }
 
