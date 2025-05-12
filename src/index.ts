@@ -646,7 +646,7 @@ function transformUseFieldDestructurePatterns(
       // Get value type (only for TS)
       let valueType: TSType | null = null;
       // biome-ignore lint/suspicious/noExplicitAny: Allow any type parameter for pragmatic fix
-      const callExpr = node.init as unknown as { typeParameters?: any };
+      const callExpr = node.init as { typeParameters?: any };
       if (
         callExpr.typeParameters &&
         callExpr.typeParameters.type === "TSTypeParameterInstantiation" &&
