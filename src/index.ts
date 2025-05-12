@@ -195,6 +195,7 @@ function transformToGetInputProps(
     const idValue = extractAttributeValue(idAttr, {
       defaultValue: fieldName || "field",
     }) as string;
+    const asValue = extractAttributeValue(asAttr, {}) as string | null;
 
     // Common attributes: name, default value, type conversion function
     const ATTRS = [
@@ -266,7 +267,7 @@ function transformToGetInputProps(
       ) {
         // Get field name
         let fieldNameExpr: import("jscodeshift").Expression = j.literal(
-          fieldName || "field",
+          fieldName ?? "field",
         );
         if (nameAttr?.value && isJSXExpressionContainer(nameAttr.value)) {
           fieldNameExpr = nameAttr.value.expression;
@@ -277,7 +278,7 @@ function transformToGetInputProps(
         const useFieldDecl = j.variableDeclaration("const", [
           j.variableDeclarator(
             j.arrayPattern([j.identifier(fieldVarName)]),
-            createUseFieldCall(j, fieldNameExpr as Expression),
+            createCallExpression(j, "useField", [fieldNameExpr as Expression]),
           ),
         ]);
 
@@ -301,7 +302,10 @@ function transformToGetInputProps(
             j.jsxIdentifier("input"),
             [
               j.jsxSpreadAttribute(getInputPropsCall),
-              createIdAttribute(j, idAttr?.value),
+              createIdAttribute(
+                j,
+                j.stringLiteral(idValue ?? fieldName ?? "field"),
+              ),
             ] as (JSXAttribute | JSXSpreadAttribute)[],
             true,
           ),
@@ -336,22 +340,28 @@ function transformToGetInputProps(
         // Fallback to the old implementation if we can't find the parent function
         const fieldsMemberExpr = createBracketFieldAccessor(
           j,
-          j.stringLiteral(fieldName || idValue),
+          j.stringLiteral(fieldName ?? idValue ?? "field"),
         );
 
-        const getInputPropsCall = j.callExpression(
-          j.identifier("getInputProps"),
-          [fieldsMemberExpr, j.objectExpression(getInputPropsProperties)],
-        );
+        const getInputPropsCall = createCallExpression(j, "getInputProps", [
+          fieldsMemberExpr,
+          j.objectExpression(getInputPropsProperties),
+        ]);
 
         const newAttrs = [
           j.jsxSpreadAttribute(getInputPropsCall),
-          createIdAttribute(j, j.stringLiteral(idValue)),
+          createIdAttribute(
+            j,
+            j.stringLiteral(idValue ?? fieldName ?? "field"),
+          ),
         ];
 
         // Handle Field with custom component (as prop)
-        if (asAttr?.type === "JSXAttribute" && asAttr.value) {
-          const customComponentName = extractCustomComponentName(asAttr);
+        if (asValue) {
+          const customComponentName = extractCustomComponentName({
+            type: "JSXAttribute",
+            value: j.stringLiteral(asValue),
+          });
           if (customComponentName) {
             const customElement = j.jsxElement(
               j.jsxOpeningElement(
@@ -364,11 +374,11 @@ function transformToGetInputProps(
             );
             elemPath.replace(customElement);
           } else {
-            const inputElement = createInputElement(j, newAttrs);
+            const inputElement = createJSXElement(j, "input", newAttrs, true);
             elemPath.replace(inputElement);
           }
         } else {
-          const inputElement = createInputElement(j, newAttrs);
+          const inputElement = createJSXElement(j, "input", newAttrs, true);
           elemPath.replace(inputElement);
         }
       }
@@ -376,17 +386,17 @@ function transformToGetInputProps(
       // For regular input elements
       const fieldsMemberExpr = createBracketFieldAccessor(
         j,
-        j.stringLiteral(fieldName || idValue),
+        j.stringLiteral(fieldName ?? idValue ?? "field"),
       );
 
-      const getInputPropsCall = j.callExpression(
-        j.identifier("getInputProps"),
-        [fieldsMemberExpr, j.objectExpression(getInputPropsProperties)],
-      );
+      const getInputPropsCall = createCallExpression(j, "getInputProps", [
+        fieldsMemberExpr,
+        j.objectExpression(getInputPropsProperties),
+      ]);
 
       const newAttrs = [
         j.jsxSpreadAttribute(getInputPropsCall),
-        createIdAttribute(j, j.stringLiteral(idValue)),
+        createIdAttribute(j, j.stringLiteral(idValue ?? fieldName ?? "field")),
       ];
 
       el.attributes = newAttrs;
@@ -2255,8 +2265,8 @@ function transformFieldComponentInForm(
       );
 
   // Create getInputProps call with fields accessor
-  const getInputPropsCall = j.callExpression(j.identifier("getInputProps"), [
-    fieldsAccessExpr,
+  const getInputPropsCall = createCallExpression(j, "getInputProps", [
+    fieldsAccessExpr as Expression,
     j.objectExpression([
       j.property("init", j.identifier("type"), j.stringLiteral(typeValue)),
     ]),
@@ -2268,32 +2278,13 @@ function transformFieldComponentInForm(
   ];
 
   // Add id attribute if present - preserve original id value whenever possible
-  if (idAttr?.value) {
-    if (isJSXExpressionContainer(idAttr.value)) {
-      // Keep the original JSX expression container
-      newAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idAttr.value as any));
-    } else if (isStringLiteral(idAttr.value)) {
-      // String literal
-      newAttrs.push(
-        j.jsxAttribute(
-          j.jsxIdentifier("id"),
-          j.stringLiteral(idAttr.value.value),
-        ),
-      );
-    } else {
-      // Fallback
-      newAttrs.push(
-        j.jsxAttribute(j.jsxIdentifier("id"), j.stringLiteral("field-id")),
-      );
-    }
+  const idValue = getJSXAttributeValue(idAttr);
+  if (idValue) {
+    newAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idValue));
   }
 
   // Create the new element
-  const newElement = j.jsxElement(
-    j.jsxOpeningElement(j.jsxIdentifier(elementName), newAttrs, true),
-    null,
-    [],
-  );
+  const newElement = createJSXElement(j, elementName, newAttrs, true);
 
   // Replace Field with the new element
   path.replace(newElement);
@@ -2343,8 +2334,8 @@ function transformFieldComponentWithUseField(
   }
 
   // Create the useField call
-  const useFieldCall = j.callExpression(j.identifier("useField"), [
-    useFieldArg as any,
+  const useFieldCall = createCallExpression(j, "useField", [
+    useFieldArg as Expression,
   ]);
 
   // Add generic parameter for name field if needed
@@ -2384,8 +2375,8 @@ function transformFieldComponentWithUseField(
   ]);
 
   // Create getInputProps call
-  const getInputPropsCall = j.callExpression(j.identifier("getInputProps"), [
-    j.identifier(fieldVarName),
+  const getInputPropsCall = createCallExpression(j, "getInputProps", [
+    j.identifier(fieldVarName) as Expression,
     j.objectExpression([
       j.property("init", j.identifier("type"), j.stringLiteral(typeValue)),
     ]),
@@ -2397,37 +2388,13 @@ function transformFieldComponentWithUseField(
   ];
 
   // Add id attribute if present - preserve original id value whenever possible
-  if (idAttr?.value) {
-    if (isJSXExpressionContainer(idAttr.value)) {
-      // Keep the original JSX expression container
-      inputAttrs.push(
-        j.jsxAttribute(
-          j.jsxIdentifier("id"),
-          idAttr.value as import("jscodeshift").JSXExpressionContainer,
-        ),
-      );
-    } else if (isStringLiteral(idAttr.value)) {
-      // String literal
-      inputAttrs.push(
-        j.jsxAttribute(
-          j.jsxIdentifier("id"),
-          j.stringLiteral(idAttr.value.value),
-        ),
-      );
-    } else {
-      // Fallback
-      inputAttrs.push(
-        j.jsxAttribute(j.jsxIdentifier("id"), j.stringLiteral("field-id")),
-      );
-    }
+  const idValue = getJSXAttributeValue(idAttr);
+  if (idValue) {
+    inputAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idValue));
   }
 
   // Create the new element
-  const newElement = j.jsxElement(
-    j.jsxOpeningElement(j.jsxIdentifier(elementName), inputAttrs, true),
-    null,
-    [],
-  );
+  const newElement = createJSXElement(j, elementName, inputAttrs, true);
 
   // Check if we already have a useField declaration
   const alreadyHasUseField =
@@ -2550,4 +2517,74 @@ function createGetInputPropsCall(
       ...extraProps,
     ]),
   ]);
+}
+
+/**
+ * Safely extract a value from a JSXAttribute (string literal or expression)
+ * @param attr JSXAttribute or null/undefined
+ * @returns The attribute value if it is a string literal or expression container, otherwise undefined
+ */
+function getJSXAttributeValue(
+  attr: AttributeLike | null | undefined,
+): JSXAttribute["value"] | undefined {
+  if (!attr) return undefined;
+  if (isStringLiteral(attr.value) || isJSXExpressionContainer(attr.value)) {
+    return attr.value;
+  }
+  return undefined;
+}
+
+/**
+ * Create a call expression node (e.g., useField, getInputProps)
+ * @param j JSCodeshift instance
+ * @param callee Name of the function to call
+ * @param args Arguments for the call
+ */
+function createCallExpression(
+  j: JSCodeshift,
+  callee: string,
+  args: Expression[],
+): Expression {
+  return j.callExpression(
+    j.identifier(callee),
+    args.map((a) => a as any),
+  );
+}
+
+/**
+ * Add a JSX attribute to an attribute list if value is defined
+ * @param attrs Attribute list to mutate
+ * @param j JSCodeshift instance
+ * @param name Attribute name
+ * @param value Attribute value (string literal or expression container)
+ */
+function pushJSXAttribute(
+  attrs: (JSXAttribute | JSXSpreadAttribute)[],
+  j: JSCodeshift,
+  name: string,
+  value: JSXAttribute["value"] | undefined,
+) {
+  if (value !== undefined) {
+    attrs.push(j.jsxAttribute(j.jsxIdentifier(name), value));
+  }
+}
+
+/**
+ * Create a generic JSX element
+ * @param j JSCodeshift instance
+ * @param tag Tag name
+ * @param attributes List of attributes
+ * @param selfClosing Whether the element is self-closing
+ */
+function createJSXElement(
+  j: JSCodeshift,
+  tag: string,
+  attributes: (JSXAttribute | JSXSpreadAttribute)[],
+  selfClosing = true,
+) {
+  return j.jsxElement(
+    j.jsxOpeningElement(j.jsxIdentifier(tag), attributes, selfClosing),
+    null,
+    [],
+  );
 }
