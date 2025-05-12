@@ -6,7 +6,6 @@ import jscodeshift, {
   type JSXAttribute,
   type JSXSpreadAttribute,
   type Statement,
-  type TSType,
 } from "jscodeshift";
 import { format } from "prettier";
 import * as recast from "recast";
@@ -221,18 +220,22 @@ function transformToGetInputProps(
         value !== null &&
         !(typeof value === "object" && Object.keys(value).length === 0)
       ) {
-        let propValue: K.ExpressionKind | K.PatternKind;
+        // Handle propValue initialization with an IIFE that returns the value or skips the iteration
         if (
-          typeof value === "string" ||
-          typeof value === "number" ||
-          typeof value === "boolean"
+          !(
+            typeof value === "string" ||
+            typeof value === "number" ||
+            typeof value === "boolean" ||
+            (typeof value === "object" && "type" in value)
+          )
         ) {
-          propValue = j.literal(value);
-        } else if (typeof value === "object" && "type" in value) {
-          propValue = value as K.ExpressionKind;
-        } else {
           continue; // Skip invalid values
         }
+
+        const propValue =
+          typeof value === "object" && "type" in value
+            ? (value as K.ExpressionKind)
+            : j.literal(value);
 
         getInputPropsProperties.push(
           j.property("init", j.identifier(name), propValue),
@@ -596,20 +599,27 @@ function transformUseFieldDestructurePatterns(
       const formId = j.identifier("form");
 
       // Extract necessary information from the original ObjectPattern
-      let fieldName = "user"; // Default value
-      let fieldNameIsVariable = false;
+      const { fieldName, fieldNameIsVariable } = (() => {
+        let tmpFieldName = "user"; // Default value
+        let tmpFieldNameIsVariable = false;
 
-      // Get field name from the first argument of fieldInit
-      if (node.init.arguments && node.init.arguments.length > 0) {
-        const firstArg = node.init.arguments[0];
-        if (firstArg && firstArg.type === "StringLiteral") {
-          fieldName = firstArg.value;
-        } else if (firstArg && firstArg.type === "Identifier") {
-          // If it's a variable, reference it
-          fieldName = firstArg.name;
-          fieldNameIsVariable = true;
+        // Get field name from the first argument of fieldInit
+        if (node.init.arguments && node.init.arguments.length > 0) {
+          const firstArg = node.init.arguments[0];
+          if (firstArg && firstArg.type === "StringLiteral") {
+            tmpFieldName = firstArg.value;
+          } else if (firstArg && firstArg.type === "Identifier") {
+            // If it's a variable, reference it
+            tmpFieldName = firstArg.name;
+            tmpFieldNameIsVariable = true;
+          }
         }
-      }
+
+        return {
+          fieldName: tmpFieldName,
+          fieldNameIsVariable: tmpFieldNameIsVariable,
+        };
+      })();
 
       // Check if setTouched is used in the original code
       const hasTouchedProperty =
@@ -643,17 +653,19 @@ function transformUseFieldDestructurePatterns(
         ),
       ]);
 
-      // Get value type (only for TS)
-      let valueType: TSType | null = null;
-      // biome-ignore lint/suspicious/noExplicitAny: Allow any type parameter for pragmatic fix
-      const callExpr = node.init as { typeParameters?: any };
-      if (
-        callExpr.typeParameters &&
-        callExpr.typeParameters.type === "TSTypeParameterInstantiation" &&
-        callExpr.typeParameters.params.length > 0
-      ) {
-        valueType = callExpr.typeParameters.params[0];
-      }
+      // Get value type (only for TS) using IIFE
+      const valueType = (() => {
+        // biome-ignore lint/suspicious/noExplicitAny: Allow any type parameter for pragmatic fix
+        const callExpr = node.init as { typeParameters?: any };
+        if (
+          callExpr.typeParameters &&
+          callExpr.typeParameters.type === "TSTypeParameterInstantiation" &&
+          callExpr.typeParameters.params.length > 0
+        ) {
+          return callExpr.typeParameters.params[0];
+        }
+        return null;
+      })();
 
       // Generate setValue function
       const valueParam = valueType
@@ -849,24 +861,26 @@ function transformGetFieldPropsObjectPattern(
       continue;
     }
 
-    let fieldsPropertyNode:
-      | import("jscodeshift").Identifier
-      | import("jscodeshift").StringLiteral
-      | import("jscodeshift").NumericLiteral;
+    const fieldsPropertyNode = (() => {
+      if (
+        fieldArg.type === "Identifier" ||
+        fieldArg.type === "StringLiteral" ||
+        fieldArg.type === "NumericLiteral"
+      ) {
+        return fieldArg;
+      }
 
-    if (fieldArg.type === "Identifier") {
-      fieldsPropertyNode = fieldArg;
-    } else if (fieldArg.type === "StringLiteral") {
-      fieldsPropertyNode = fieldArg;
-    } else if (fieldArg.type === "NumericLiteral") {
-      fieldsPropertyNode = fieldArg;
-    } else {
       // Fallback: extract string name and create a new StringLiteral node.
       const extractedNameStr = extractFieldNameFromArg(fieldArg); // fieldArg is an AST node here
       if (!extractedNameStr) {
-        continue;
+        return null; // Will be checked below
       }
-      fieldsPropertyNode = j.stringLiteral(extractedNameStr);
+      return j.stringLiteral(extractedNameStr);
+    })();
+
+    // Check if we got a valid fieldsPropertyNode
+    if (fieldsPropertyNode === null) {
+      continue;
     }
 
     const fieldsAccessor = createBracketFieldAccessor(j, fieldsPropertyNode);
@@ -907,13 +921,15 @@ function transformGetFieldPropsObjectPattern(
       const propsVarName = `${fieldName}FieldProps`;
 
       // Get the variable name for the value
-      let valueVarName = "value";
-      if (
-        valueProperty.value.type === "Identifier" &&
-        valueProperty.value.name
-      ) {
-        valueVarName = valueProperty.value.name;
-      }
+      const valueVarName = (() => {
+        if (
+          valueProperty.value.type === "Identifier" &&
+          valueProperty.value.name
+        ) {
+          return valueProperty.value.name;
+        }
+        return "value";
+      })();
 
       // Create the new declarations
       const newDeclarations = [
@@ -993,29 +1009,31 @@ function transformJSXGetFieldProps(
     // Create the field accessor
     const fieldAccessor = createFieldAccessor(j, fieldArg, fieldName);
 
-    // Create typeAttr if needed
-    let typeValue = "text";
+    // Create typeAttr if needed and handle typeValue with IIFE
+    const typeValue = (() => {
+      // Check if there's a type attribute next to this spread
+      const jsxElement = j(path).closest(j.JSXOpeningElement);
+      if (jsxElement.size() > 0) {
+        const typeAttr = jsxElement.find(j.JSXAttribute, {
+          name: { name: "type" },
+        });
 
-    // Check if there's a type attribute next to this spread
-    const jsxElement = j(path).closest(j.JSXOpeningElement);
-    if (jsxElement.size() > 0) {
-      const typeAttr = jsxElement.find(j.JSXAttribute, {
-        name: { name: "type" },
-      });
-
-      if (typeAttr.size() > 0) {
-        const attrNodes = typeAttr.nodes();
-        if (attrNodes.length > 0) {
-          const attrNode = attrNodes[0];
-          if (attrNode?.value && isStringLiteral(attrNode.value)) {
-            typeValue = attrNode.value.value;
+        if (typeAttr.size() > 0) {
+          const attrNodes = typeAttr.nodes();
+          if (attrNodes.length > 0) {
+            const attrNode = attrNodes[0];
+            if (attrNode?.value && isStringLiteral(attrNode.value)) {
+              // Remove the type attribute as it will be included in getInputProps
+              typeAttr.remove();
+              return attrNode.value.value;
+            }
           }
-
-          // Remove the type attribute as it will be included in getInputProps
+          // Remove the type attribute even if we didn't extract a value
           typeAttr.remove();
         }
       }
-    }
+      return "text"; // Default value
+    })();
 
     // Replace with getInputProps
     path.node.argument = createCallExpression(j, "getInputProps", [
@@ -1578,28 +1596,25 @@ function transformFormikContextDestructuring(
       (p) => (p.key as import("jscodeshift").Identifier).name,
     );
 
-    // Function that contains this variable declarator
-    let funcPath:
-      | import("jscodeshift").ASTPath<
-          | import("jscodeshift").FunctionDeclaration
-          | import("jscodeshift").FunctionExpression
-          | import("jscodeshift").ArrowFunctionExpression
-        >
-      | null = null;
-    const tryFuncDecl = j(path).closest(j.FunctionDeclaration);
-    if (tryFuncDecl.size() > 0) {
-      funcPath = tryFuncDecl.get(0);
-    } else {
+    // Function that contains this variable declarator using IIFE
+    const funcPath = (() => {
+      const tryFuncDecl = j(path).closest(j.FunctionDeclaration);
+      if (tryFuncDecl.size() > 0) {
+        return tryFuncDecl.get(0);
+      }
+
       const tryFuncExpr = j(path).closest(j.FunctionExpression);
       if (tryFuncExpr.size() > 0) {
-        funcPath = tryFuncExpr.get(0);
-      } else {
-        const tryArrow = j(path).closest(j.ArrowFunctionExpression);
-        if (tryArrow.size() > 0) {
-          funcPath = tryArrow.get(0);
-        }
+        return tryFuncExpr.get(0);
       }
-    }
+
+      const tryArrow = j(path).closest(j.ArrowFunctionExpression);
+      if (tryArrow.size() > 0) {
+        return tryArrow.get(0);
+      }
+
+      return null;
+    })();
     if (!funcPath) continue;
     const funcNode = funcPath.node;
 
@@ -1871,31 +1886,29 @@ function transformFormikComponents(
     const initAttr = findAttribute(attrs, "initialValues");
     const validationSchemaAttr = findAttribute(attrs, "validationSchema");
 
-    // Type-safe extraction of defaultValueExpr
-    let defaultValueExpr:
-      | recast.types.namedTypes.JSXEmptyExpression
-      | K.ExpressionKind
-      | null = null;
-    if (initAttr && initAttr.type === "JSXAttribute" && initAttr.value) {
-      if (isJSXExpressionContainer(initAttr.value)) {
-        defaultValueExpr = initAttr.value.expression;
+    // Type-safe extraction of defaultValueExpr using IIFE
+    const defaultValueExpr = (() => {
+      if (initAttr && initAttr.type === "JSXAttribute" && initAttr.value) {
+        if (isJSXExpressionContainer(initAttr.value)) {
+          return initAttr.value.expression;
+        }
       }
-    }
+      return null;
+    })();
 
-    // Extract validation schema
-    let validationSchemaExpr:
-      | recast.types.namedTypes.JSXEmptyExpression
-      | K.ExpressionKind
-      | null = null;
-    if (
-      validationSchemaAttr &&
-      validationSchemaAttr.type === "JSXAttribute" &&
-      validationSchemaAttr.value
-    ) {
-      if (isJSXExpressionContainer(validationSchemaAttr.value)) {
-        validationSchemaExpr = validationSchemaAttr.value.expression;
+    // Extract validation schema using IIFE
+    const validationSchemaExpr = (() => {
+      if (
+        validationSchemaAttr &&
+        validationSchemaAttr.type === "JSXAttribute" &&
+        validationSchemaAttr.value
+      ) {
+        if (isJSXExpressionContainer(validationSchemaAttr.value)) {
+          return validationSchemaAttr.value.expression;
+        }
       }
-    }
+      return null;
+    })();
 
     // 子要素 ({ props }) => (<form … />) を取得
     const childrenFn = path.node.children?.find(
@@ -1906,25 +1919,28 @@ function transformFormikComponents(
       throw new Error("Invalid children function");
     }
 
-    // <form> JSX を抽出
-    let formJSX: JSXElement | null = null;
-
-    const body = childrenFn.body;
-    if (body.type === "JSXElement") {
-      formJSX = body;
-    } else if (body.type === "BlockStatement") {
-      const ret = body.body.find(
-        (s: { type: string }) => s.type === "ReturnStatement",
-      );
-      if (
-        ret &&
-        "argument" in ret &&
-        ret.argument &&
-        typeof ret.argument === "object"
-      ) {
-        formJSX = ret.argument.type === "JSXElement" ? ret.argument : null;
+    // <form> JSX を抽出 using IIFE
+    const formJSX = (() => {
+      const body = childrenFn.body;
+      if (body.type === "JSXElement") {
+        return body;
       }
-    }
+
+      if (body.type === "BlockStatement") {
+        const ret = body.body.find(
+          (s: { type: string }) => s.type === "ReturnStatement",
+        );
+        if (
+          ret &&
+          "argument" in ret &&
+          ret.argument &&
+          typeof ret.argument === "object"
+        ) {
+          return ret.argument.type === "JSXElement" ? ret.argument : null;
+        }
+      }
+      return null;
+    })();
 
     if (!formJSX) {
       throw new Error("Invalid children function");
@@ -2162,27 +2178,31 @@ function transformFieldComponents(
 
     if (!nameAttr) continue; // Skip Fields without name attribute
 
-    // Extract field name
+    // Extract field name with IIFE
     const { fieldNameExpr, isNameField } = (() => {
-      let isNameField = false;
-      let fieldNameExpr: Expression | { type: "Identifier"; name: string };
+      // Use temporary variables inside the IIFE
+      let tmpIsNameField = false;
+      let tmpFieldNameExpr: Expression | { type: "Identifier"; name: string };
 
       if (nameAttr.value && isJSXExpressionContainer(nameAttr.value)) {
-        fieldNameExpr = nameAttr.value.expression;
-        if (isIdentifier(fieldNameExpr) && fieldNameExpr.name === "name") {
-          isNameField = true;
+        tmpFieldNameExpr = nameAttr.value.expression;
+        if (
+          isIdentifier(tmpFieldNameExpr) &&
+          tmpFieldNameExpr.name === "name"
+        ) {
+          tmpIsNameField = true;
         }
       } else if (isStringLiteral(nameAttr.value)) {
-        fieldNameExpr = j.stringLiteral(nameAttr.value.value);
+        tmpFieldNameExpr = j.stringLiteral(nameAttr.value.value);
         if (nameAttr.value.value === "name") {
-          isNameField = true;
+          tmpIsNameField = true;
         }
       } else {
         // Default for edge cases
-        fieldNameExpr = j.stringLiteral("field");
+        tmpFieldNameExpr = j.stringLiteral("field");
       }
 
-      return { fieldNameExpr, isNameField };
+      return { fieldNameExpr: tmpFieldNameExpr, isNameField: tmpIsNameField };
     })();
 
     // Extract input type
