@@ -261,11 +261,7 @@ function transformToGetInputProps(
       }
 
       const funcNode = functionComp.get(0).node;
-      if (
-        funcNode &&
-        funcNode.body &&
-        funcNode.body.type === "BlockStatement"
-      ) {
+      if (funcNode?.body?.type === "BlockStatement") {
         // Get field name
         let fieldNameExpr = j.literal(fieldName ?? "field");
         if (nameAttr?.value && isJSXExpressionContainer(nameAttr.value)) {
@@ -2273,17 +2269,16 @@ function transformFieldComponentInForm(
   const idValue = getJSXAttributeValue(idAttr);
   if (idValue) {
     // 型ガードで型を分岐
-    if (isStringLiteral(idValue)) {
-      newAttrs.push(
-        j.jsxAttribute(j.jsxIdentifier("id"), j.stringLiteral(idValue.value)),
-      );
-    } else if (isJSXExpressionContainer(idValue)) {
-      // expressionの型を明示
+    if (isJSXExpressionContainer(idValue)) {
       newAttrs.push(
         j.jsxAttribute(
           j.jsxIdentifier("id"),
           j.jsxExpressionContainer(idValue.expression as ExpressionKind),
         ),
+      );
+    } else if (isStringLiteral(idValue)) {
+      newAttrs.push(
+        j.jsxAttribute(j.jsxIdentifier("id"), j.stringLiteral(idValue.value)),
       );
     }
   }
@@ -2393,16 +2388,16 @@ function transformFieldComponentWithUseField(
   // Add id attribute if present - preserve original id value whenever possible
   const idValue = getJSXAttributeValue(idAttr);
   if (idValue) {
-    if (isStringLiteral(idValue)) {
-      inputAttrs.push(
-        j.jsxAttribute(j.jsxIdentifier("id"), j.stringLiteral(idValue.value)),
-      );
-    } else if (isJSXExpressionContainer(idValue)) {
+    if (isJSXExpressionContainer(idValue)) {
       inputAttrs.push(
         j.jsxAttribute(
           j.jsxIdentifier("id"),
           j.jsxExpressionContainer(idValue.expression as ExpressionKind),
         ),
+      );
+    } else if (isStringLiteral(idValue)) {
+      inputAttrs.push(
+        j.jsxAttribute(j.jsxIdentifier("id"), j.stringLiteral(idValue.value)),
       );
     }
   }
