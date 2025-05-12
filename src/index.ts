@@ -1,3 +1,4 @@
+import type * as K from "ast-types/lib/gen/kinds";
 import jscodeshift, {
   type JSCodeshift,
   type JSXElement,
@@ -12,7 +13,6 @@ import jscodeshift, {
 import { format } from "prettier";
 import * as recast from "recast";
 import * as recastTS from "recast/parsers/typescript";
-import type * as K from "ast-types/lib/gen/kinds";
 // JSX attribute-related generic type definitions
 interface AttributeLike {
   type: string;
@@ -260,15 +260,11 @@ function transformToGetInputProps(
       }
 
       const funcNode = functionComp.get(0).node;
-      if (
-        funcNode &&
-        funcNode.body &&
-        funcNode.body.type === "BlockStatement"
-      ) {
+      if (funcNode?.body?.type === "BlockStatement") {
         // Get field name
-        let fieldNameExpr = j.literal(fieldName ?? "field");
+        let fieldNameExpr: K.ExpressionKind = j.literal(fieldName ?? "field");
         if (nameAttr?.value && isJSXExpressionContainer(nameAttr.value)) {
-          fieldNameExpr = nameAttr.value.expression;
+          fieldNameExpr = nameAttr.value.expression as K.ExpressionKind;
         }
 
         // Create useField declaration
@@ -1687,7 +1683,10 @@ function analyzeDestructuredPropsUsage(
   // Check if values is referenced and if it's in the referenceCounts
   const hasValuesUsage =
     propNames.includes("values") &&
+    // We need to use bracket notation here because referenceCounts is built dynamically
+    // biome-ignore lint/complexity/useLiteralKeys: Properties are added dynamically
     referenceCounts["values"] !== undefined &&
+    // biome-ignore lint/complexity/useLiteralKeys: Properties are added dynamically
     referenceCounts["values"] > 0;
 
   return {
@@ -2263,7 +2262,13 @@ function transformFieldComponentInForm(
   // Add id attribute if present - preserve original id value whenever possible
   const idValue = getJSXAttributeValue(idAttr);
   if (idValue) {
-    newAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idValue));
+    if (isJSXExpressionContainer(idValue)) {
+      newAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idValue));
+    } else if (isStringLiteral(idValue)) {
+      newAttrs.push(
+        j.jsxAttribute(j.jsxIdentifier("id"), j.stringLiteral(idValue.value)),
+      );
+    }
   }
 
   // Create the new element
@@ -2371,7 +2376,13 @@ function transformFieldComponentWithUseField(
   // Add id attribute if present - preserve original id value whenever possible
   const idValue = getJSXAttributeValue(idAttr);
   if (idValue) {
-    inputAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idValue));
+    if (isJSXExpressionContainer(idValue)) {
+      inputAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idValue));
+    } else if (isStringLiteral(idValue)) {
+      inputAttrs.push(
+        j.jsxAttribute(j.jsxIdentifier("id"), j.stringLiteral(idValue.value)),
+      );
+    }
   }
 
   // Create the new element
@@ -2458,7 +2469,8 @@ function createIdAttribute(
   if (idValue) {
     if (isJSXExpressionContainer(idValue)) {
       return j.jsxAttribute(j.jsxIdentifier("id"), idValue);
-    } else if (isStringLiteral(idValue)) {
+    }
+    if (isStringLiteral(idValue)) {
       return j.jsxAttribute(
         j.jsxIdentifier("id"),
         j.stringLiteral(idValue.value),
@@ -2498,10 +2510,18 @@ function createGetInputPropsCall<
  * @param attr JSXAttribute or null/undefined
  * @returns The attribute value if it is a string literal or expression container, otherwise undefined
  */
-function getJSXAttributeValue(attr: AttributeLike | null | undefined) {
+function getJSXAttributeValue(
+  attr: AttributeLike | null | undefined,
+):
+  | import("jscodeshift").JSXExpressionContainer
+  | { type: "StringLiteral"; value: string }
+  | undefined {
   if (!attr) return undefined;
-  if (isStringLiteral(attr.value) || isJSXExpressionContainer(attr.value)) {
-    return attr.value;
+  if (isStringLiteral(attr.value)) {
+    return attr.value as { type: "StringLiteral"; value: string };
+  }
+  if (isJSXExpressionContainer(attr.value)) {
+    return attr.value as import("jscodeshift").JSXExpressionContainer;
   }
   return undefined;
 }
