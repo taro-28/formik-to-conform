@@ -277,7 +277,7 @@ function transformToGetInputProps(
         const useFieldDecl = j.variableDeclaration("const", [
           j.variableDeclarator(
             j.arrayPattern([j.identifier(fieldVarName)]),
-            j.callExpression(j.identifier("useField"), [fieldNameExpr]),
+            j.callExpression(j.identifier("useField"), [fieldNameExpr as any]),
           ),
         ]);
 
@@ -305,7 +305,7 @@ function transformToGetInputProps(
             [
               j.jsxSpreadAttribute(getInputPropsCall),
               idAttr
-                ? j.jsxAttribute(j.jsxIdentifier("id"), idAttr.value)
+                ? j.jsxAttribute(j.jsxIdentifier("id"), idAttr.value as any)
                 : null,
             ].filter(Boolean) as (JSXAttribute | JSXSpreadAttribute)[],
             true,
@@ -2255,7 +2255,7 @@ function transformFieldComponentInForm(
   if (idAttr?.value) {
     if (isJSXExpressionContainer(idAttr.value)) {
       // Keep the original JSX expression container
-      newAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idAttr.value));
+      newAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idAttr.value as any));
     } else if (isStringLiteral(idAttr.value)) {
       // String literal
       newAttrs.push(
@@ -2375,7 +2375,9 @@ function transformFieldComponentWithUseField(
   if (idAttr?.value) {
     if (isJSXExpressionContainer(idAttr.value)) {
       // Keep the original JSX expression container
-      inputAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idAttr.value));
+      inputAttrs.push(
+        j.jsxAttribute(j.jsxIdentifier("id"), idAttr.value as any),
+      );
     } else if (isStringLiteral(idAttr.value)) {
       // String literal
       inputAttrs.push(
