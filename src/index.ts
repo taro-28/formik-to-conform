@@ -39,9 +39,7 @@ function isFunctionExpression(
     node !== null &&
     typeof node === "object" &&
     "type" in node &&
-    ["ArrowFunctionExpression", "FunctionExpression"].includes(
-      node.type as string,
-    )
+    ["ArrowFunctionExpression", "FunctionExpression"].includes(node.type)
   );
 }
 
