@@ -94,7 +94,7 @@ function extractAttributeValue(
     defaultValue?: unknown;
     toValue?: (value: unknown) => unknown;
   } = {},
-): string | null | unknown {
+) {
   if (!(attr && "value" in attr && attr.value)) {
     return opts.defaultValue;
   }
@@ -221,7 +221,7 @@ function transformToGetInputProps(
         value !== null &&
         !(typeof value === "object" && Object.keys(value).length === 0)
       ) {
-        let propValue: import("jscodeshift").Expression;
+        let propValue: K.ExpressionKind | K.PatternKind;
         if (
           typeof value === "string" ||
           typeof value === "number" ||
@@ -229,13 +229,12 @@ function transformToGetInputProps(
         ) {
           propValue = j.literal(value);
         } else if (typeof value === "object" && "type" in value) {
-          propValue = value as import("jscodeshift").Expression;
+          propValue = value as K.ExpressionKind;
         } else {
           continue; // Skip invalid values
         }
 
         getInputPropsProperties.push(
-          // @ts-ignore: Property 'parameter' is missing in type 'Expression' but required in type 'TSParameterProperty'.
           j.property("init", j.identifier(name), propValue),
         );
       }
@@ -255,7 +254,9 @@ function transformToGetInputProps(
       const funcNode = functionComp.get(0).node;
       if (funcNode?.body?.type === "BlockStatement") {
         // Get field name
-        let fieldNameExpr: K.ExpressionKind = j.literal(fieldName ?? "field");
+        let fieldNameExpr: K.ExpressionKind | K.SpreadElementKind = j.literal(
+          fieldName ?? "field",
+        );
         if (nameAttr?.value && isJSXExpressionContainer(nameAttr.value)) {
           fieldNameExpr = nameAttr.value.expression as K.ExpressionKind;
         }
@@ -414,7 +415,7 @@ function extractCustomComponentName(asAttr: JSXAttribute): string | null {
     asAttr.value.type === "StringLiteral" &&
     "value" in asAttr.value
   ) {
-    return (asAttr.value as { value: string }).value;
+    return asAttr.value.value;
   }
 
   return null;
