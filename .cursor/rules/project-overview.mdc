@@ -9,6 +9,10 @@ This project is a codemod tool for converting React forms from Formik to Conform
 
 ## Recent Updates
 
+- Refactored form test detection to use structural pattern matching instead of hardcoded component names
+- Removed hardcoded template strings for test cases and implemented generic AST transformations
+- Added `isFormTestPattern` and `isFormContext` helper functions to detect patterns by structure
+- Improved import management for form test files
 - Fixed variable naming consistency in useFormikContext transformations
 - Ensured that `emailFieldProps` is consistently used instead of `emailInputProps`
 - Improved the ordering of variable declarations to match test expectations

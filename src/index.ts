@@ -12,7 +12,7 @@ import jscodeshift, {
 import { format } from "prettier";
 import * as recast from "recast";
 import * as recastTS from "recast/parsers/typescript";
-
+import type * as K from "ast-types/lib/gen/kinds";
 // JSX attribute-related generic type definitions
 interface AttributeLike {
   type: string;
@@ -291,7 +291,7 @@ function transformToGetInputProps(
         // Create getInputProps call
         const getInputPropsCall = createGetInputPropsCall(
           j,
-          fieldNameExpr as Expression,
+          fieldNameExpr,
           typeValue,
           getInputPropsProperties,
         );
@@ -430,20 +430,6 @@ function extractCustomComponentName(asAttr: AttributeLike): string | null {
   }
 
   return null;
-}
-
-/**
- * Creates a JSX input element
- */
-function createInputElement(
-  j: JSCodeshift,
-  attributes: (JSXAttribute | JSXSpreadAttribute)[],
-) {
-  return j.jsxElement(
-    j.jsxOpeningElement(j.jsxIdentifier("input"), attributes, true),
-    null,
-    [],
-  );
 }
 
 /**
@@ -1866,7 +1852,7 @@ function createFormHelperDeclarations(
  * 出力をフォーマットする
  */
 async function formatOutput(root: ReturnType<JSCodeshift>): Promise<string> {
-  return format(
+  return await format(
     root.toSource({
       quote: "double",
       trailingComma: true,
@@ -2266,7 +2252,7 @@ function transformFieldComponentInForm(
 
   // Create getInputProps call with fields accessor
   const getInputPropsCall = createCallExpression(j, "getInputProps", [
-    fieldsAccessExpr as Expression,
+    fieldsAccessExpr,
     j.objectExpression([
       j.property("init", j.identifier("type"), j.stringLiteral(typeValue)),
     ]),
@@ -2334,9 +2320,7 @@ function transformFieldComponentWithUseField(
   }
 
   // Create the useField call
-  const useFieldCall = createCallExpression(j, "useField", [
-    useFieldArg as Expression,
-  ]);
+  const useFieldCall = createCallExpression(j, "useField", [useFieldArg]);
 
   // Add generic parameter for name field if needed
   if (isNameField) {
@@ -2376,7 +2360,7 @@ function transformFieldComponentWithUseField(
 
   // Create getInputProps call
   const getInputPropsCall = createCallExpression(j, "getInputProps", [
-    j.identifier(fieldVarName) as Expression,
+    j.identifier(fieldVarName),
     j.objectExpression([
       j.property("init", j.identifier("type"), j.stringLiteral(typeValue)),
     ]),
@@ -2495,16 +2479,16 @@ function createIdAttribute(
  * @param typeValue type属性値
  * @param extraProps 追加プロパティ
  */
-function createGetInputPropsCall(
+function createGetInputPropsCall<
+  T extends K.ExpressionKind | K.SpreadElementKind,
+>(
   j: JSCodeshift,
-  fieldExpr: Expression,
+  fieldExpr: T,
   typeValue: string,
   extraProps: import("jscodeshift").Property[] = [],
-): import("jscodeshift").Expression {
-  // biome-ignore lint/suspicious/noExplicitAny: jscodeshift AST interop
+) {
   return j.callExpression(j.identifier("getInputProps"), [
-    // biome-ignore lint/suspicious/noExplicitAny: jscodeshift AST interop
-    fieldExpr as any,
+    fieldExpr,
     j.objectExpression([
       j.property("init", j.identifier("type"), j.literal(typeValue)),
       ...extraProps,
@@ -2517,9 +2501,7 @@ function createGetInputPropsCall(
  * @param attr JSXAttribute or null/undefined
  * @returns The attribute value if it is a string literal or expression container, otherwise undefined
  */
-function getJSXAttributeValue(
-  attr: AttributeLike | null | undefined,
-): JSXAttribute["value"] | undefined {
+function getJSXAttributeValue(attr: AttributeLike | null | undefined) {
   if (!attr) return undefined;
   if (isStringLiteral(attr.value) || isJSXExpressionContainer(attr.value)) {
     return attr.value;
@@ -2537,12 +2519,8 @@ function createCallExpression(
   j: JSCodeshift,
   callee: string,
   args: Expression[],
-): import("jscodeshift").Expression {
-  // biome-ignore lint/suspicious/noExplicitAny: jscodeshift AST interop
-  return j.callExpression(
-    j.identifier(callee),
-    args.map((a) => a as any),
-  );
+) {
+  return j.callExpression(j.identifier(callee), args);
 }
 
 /**

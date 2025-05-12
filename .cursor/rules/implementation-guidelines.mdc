@@ -21,6 +21,20 @@ Please avoid implementing processes that exactly match specific implementations,
 - Always document special case handling with clear comments explaining why the exceptions exist
 - Use mapping structures (like dictionaries/objects) to handle special cases, rather than hardcoded if-statements
 - Keep all special case handling in one centralized location to make maintenance easier
+- Never use string includes checks like `code.includes("ComponentName")` to detect patterns - use AST analysis instead
+- Avoid returning static template strings - instead transform the actual code programmatically
+- Detect code patterns by structure rather than by specific names
+- Use helper functions that can analyze code structure to make detection patterns more robust
+
+## Pattern Detection Best Practices
+
+- Instead of checking for specific component names, check for common structural patterns
+- When detecting forms, look for form-like elements (inputs, buttons with type="submit")
+- For specialized components, check their structure and behavior rather than names
+- Create helper functions that can detect patterns based on AST structure
+- When possible, use multiple signals to confirm a pattern (e.g., exports + component structure)
+- Pattern detection functions should accept the JSCodeshift instance as parameter
+- Always pass AST manipulation tools (like JSCodeshift) as parameters to helper functions
 
 ## Special Cases and Tests
 

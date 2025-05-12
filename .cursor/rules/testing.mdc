@@ -13,3 +13,12 @@ To run tests: `pnpm test  --run`
 - The ordering of variable declarations in test fixtures is important and should be maintained
 - When fixing test failures, ensure you understand both the input and expected output formats
 - Pay special attention to how components like `SampleUseFormikContext1` are transformed
+
+## Test-Driven Development
+
+- Use failing tests to understand the expected transformation patterns
+- Instead of hardcoding outputs to make tests pass, implement generic transformations
+- When tests require specific output formats, focus on detecting patterns in the input
+- Test different code structures that should result in the same transformation
+- If multiple tests expect similar transformations, extract common logic into helper functions
+- Understand the structural patterns in test fixtures rather than just their component names
