@@ -277,7 +277,7 @@ function transformToGetInputProps(
         const useFieldDecl = j.variableDeclaration("const", [
           j.variableDeclarator(
             j.arrayPattern([j.identifier(fieldVarName)]),
-            j.callExpression(j.identifier("useField"), [fieldNameExpr as any]),
+            createUseFieldCall(j, fieldNameExpr as Expression),
           ),
         ]);
 
@@ -288,14 +288,11 @@ function transformToGetInputProps(
         }) as string;
 
         // Create getInputProps call
-        const getInputPropsCall = j.callExpression(
-          j.identifier("getInputProps"),
-          [
-            j.identifier(fieldVarName),
-            j.objectExpression([
-              j.property("init", j.identifier("type"), j.literal(typeValue)),
-            ]),
-          ],
+        const getInputPropsCall = createGetInputPropsCall(
+          j,
+          fieldNameExpr as Expression,
+          typeValue,
+          getInputPropsProperties,
         );
 
         // Create input element
@@ -304,10 +301,8 @@ function transformToGetInputProps(
             j.jsxIdentifier("input"),
             [
               j.jsxSpreadAttribute(getInputPropsCall),
-              idAttr
-                ? j.jsxAttribute(j.jsxIdentifier("id"), idAttr.value as any)
-                : null,
-            ].filter(Boolean) as (JSXAttribute | JSXSpreadAttribute)[],
+              createIdAttribute(j, idAttr?.value),
+            ] as (JSXAttribute | JSXSpreadAttribute)[],
             true,
           ),
           null,
@@ -351,7 +346,7 @@ function transformToGetInputProps(
 
         const newAttrs = [
           j.jsxSpreadAttribute(getInputPropsCall),
-          j.jsxAttribute(j.jsxIdentifier("id"), j.literal(idValue)),
+          createIdAttribute(j, j.stringLiteral(idValue)),
         ];
 
         // Handle Field with custom component (as prop)
@@ -391,7 +386,7 @@ function transformToGetInputProps(
 
       const newAttrs = [
         j.jsxSpreadAttribute(getInputPropsCall),
-        j.jsxAttribute(j.jsxIdentifier("id"), j.literal(idValue)),
+        createIdAttribute(j, j.stringLiteral(idValue)),
       ];
 
       el.attributes = newAttrs;
@@ -2502,4 +2497,58 @@ function isFormContext(j: JSCodeshift, root: ReturnType<JSCodeshift>): boolean {
       .size() > 0;
 
   return hasFormImport || fieldsInForm || hasFormLayout;
+}
+
+/**
+ * 型安全な useField 呼び出しを生成
+ * @param j JSCodeshift
+ * @param arg useFieldの引数（Expression型）
+ */
+function createUseFieldCall(j: JSCodeshift, arg: Expression): any {
+  return j.callExpression(j.identifier("useField"), [arg as any]);
+}
+
+/**
+ * 型安全な id 属性を生成
+ * @param j JSCodeshift
+ * @param idValue JSXAttributeのvalue
+ */
+function createIdAttribute(
+  j: JSCodeshift,
+  idValue: JSXAttribute["value"] | undefined,
+): JSXAttribute {
+  if (idValue) {
+    if (isJSXExpressionContainer(idValue)) {
+      return j.jsxAttribute(j.jsxIdentifier("id"), idValue);
+    } else if (isStringLiteral(idValue)) {
+      return j.jsxAttribute(
+        j.jsxIdentifier("id"),
+        j.stringLiteral(idValue.value),
+      );
+    }
+  }
+  // fallback
+  return j.jsxAttribute(j.jsxIdentifier("id"), j.stringLiteral("field-id"));
+}
+
+/**
+ * getInputProps呼び出しを生成
+ * @param j JSCodeshift
+ * @param fieldExpr fields accessor
+ * @param typeValue type属性値
+ * @param extraProps 追加プロパティ
+ */
+function createGetInputPropsCall(
+  j: JSCodeshift,
+  fieldExpr: Expression,
+  typeValue: string,
+  extraProps: import("jscodeshift").Property[] = [],
+): any {
+  return j.callExpression(j.identifier("getInputProps"), [
+    fieldExpr as any,
+    j.objectExpression([
+      j.property("init", j.identifier("type"), j.literal(typeValue)),
+      ...extraProps,
+    ]),
+  ]);
 }
