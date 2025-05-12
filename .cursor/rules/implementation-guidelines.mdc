@@ -17,6 +17,10 @@ Please avoid implementing processes that exactly match specific implementations,
 - Add proper error handling to ensure the code is robust even with unexpected input
 - Avoid using regular expressions to directly manipulate source code strings - always prefer AST operations
 - Never rely on specific component names, variable names or file patterns in transformation logic
+- When generating variable names or identifiers, use functions that apply consistent naming conventions
+- Always document special case handling with clear comments explaining why the exceptions exist
+- Use mapping structures (like dictionaries/objects) to handle special cases, rather than hardcoded if-statements
+- Keep all special case handling in one centralized location to make maintenance easier
 
 ## Special Cases and Tests
 
@@ -26,3 +30,13 @@ Please avoid implementing processes that exactly match specific implementations,
 - When handling test fixtures, document why special handling is needed to make it clear for future development
 - If you find yourself implementing special test-only code paths, consider refactoring to use a more general approach
 - Always add tests for any special pattern handling to ensure it's properly maintained
+- Use configurable mappings for special cases that need to be maintained for backward compatibility
+
+## Code Quality and Type Safety
+
+- Always provide explicit type annotations for variables, especially when working with complex AST nodes
+- Create helper functions with proper type signatures to handle repetitive AST manipulation operations
+- Avoid type assertions (as any) whenever possible - use proper type guards instead
+- When working with JSCodeshift API, ensure your manipulation preserves the correct node types
+- All helper functions should have JSDoc comments explaining their purpose, parameters, and return types
+- When modifying node properties, verify that the modification maintains type compatibility

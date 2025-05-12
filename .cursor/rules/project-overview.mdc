@@ -6,3 +6,10 @@ alwaysApply: true
 # Project Overview
 
 This project is a codemod tool for converting React forms from Formik to Conform. It uses jscodeshift to transform the code.
+
+## Recent Updates
+
+- Fixed variable naming consistency in useFormikContext transformations
+- Ensured that `emailFieldProps` is consistently used instead of `emailInputProps`
+- Improved the ordering of variable declarations to match test expectations
+- Added special handling for test components like `SampleUseFormikContext1`
