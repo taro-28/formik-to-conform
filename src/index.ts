@@ -13,7 +13,6 @@ import { format } from "prettier";
 import * as recast from "recast";
 import * as recastTS from "recast/parsers/typescript";
 import type * as K from "ast-types/lib/gen/kinds";
-import type { ExpressionKind } from "ast-types/lib/gen/kinds";
 // JSX attribute-related generic type definitions
 interface AttributeLike {
   type: string;
@@ -261,19 +260,15 @@ function transformToGetInputProps(
       }
 
       const funcNode = functionComp.get(0).node;
-      if (funcNode?.body?.type === "BlockStatement") {
+      if (
+        funcNode &&
+        funcNode.body &&
+        funcNode.body.type === "BlockStatement"
+      ) {
         // Get field name
         let fieldNameExpr = j.literal(fieldName ?? "field");
         if (nameAttr?.value && isJSXExpressionContainer(nameAttr.value)) {
-          // 型アサーションでvalueプロパティを補う
-          const expr = nameAttr.value.expression as import(
-            "jscodeshift",
-          ).Literal;
-          if ("value" in expr) {
-            fieldNameExpr = expr;
-          } else {
-            fieldNameExpr = j.literal(fieldName ?? "field");
-          }
+          fieldNameExpr = nameAttr.value.expression;
         }
 
         // Create useField declaration
@@ -2268,19 +2263,7 @@ function transformFieldComponentInForm(
   // Add id attribute if present - preserve original id value whenever possible
   const idValue = getJSXAttributeValue(idAttr);
   if (idValue) {
-    // 型ガードで型を分岐
-    if (isJSXExpressionContainer(idValue)) {
-      newAttrs.push(
-        j.jsxAttribute(
-          j.jsxIdentifier("id"),
-          j.jsxExpressionContainer(idValue.expression as ExpressionKind),
-        ),
-      );
-    } else if (isStringLiteral(idValue)) {
-      newAttrs.push(
-        j.jsxAttribute(j.jsxIdentifier("id"), j.stringLiteral(idValue.value)),
-      );
-    }
+    newAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idValue));
   }
 
   // Create the new element
@@ -2388,18 +2371,7 @@ function transformFieldComponentWithUseField(
   // Add id attribute if present - preserve original id value whenever possible
   const idValue = getJSXAttributeValue(idAttr);
   if (idValue) {
-    if (isJSXExpressionContainer(idValue)) {
-      inputAttrs.push(
-        j.jsxAttribute(
-          j.jsxIdentifier("id"),
-          j.jsxExpressionContainer(idValue.expression as ExpressionKind),
-        ),
-      );
-    } else if (isStringLiteral(idValue)) {
-      inputAttrs.push(
-        j.jsxAttribute(j.jsxIdentifier("id"), j.stringLiteral(idValue.value)),
-      );
-    }
+    inputAttrs.push(j.jsxAttribute(j.jsxIdentifier("id"), idValue));
   }
 
   // Create the new element
